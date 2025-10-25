@@ -1,129 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>IPTV Downloader</title>
-<style>
-  :root {
-    --bg:#0d1117; --panel:#161b22; --accent:#2f81f7; --text:#e6edf3;
-  }
-  body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:"Inter",sans-serif; display:flex; flex-direction:column; height:100vh;
-  }
-  header{background:var(--panel);padding:10px 20px;font-size:1.3em;font-weight:600;color:var(--accent);text-align:center;}
-  main{flex:1;display:flex;flex-direction:row;}
-  #login,#menu{background:var(--panel);width:300px;padding:20px;display:flex;flex-direction:column;gap:10px;}
-  #movieGrid{display:none;flex-wrap:wrap;gap:12px;padding:12px;overflow-y:auto;background:var(--panel);}
-  .movie-card{width:140px;cursor:pointer;text-align:center;}
-  .movie-card img{width:100%;height:200px;object-fit:cover;border-radius:8px;transition:transform .2s;}
-  .movie-card img:hover{transform:scale(1.05);}
-  .movie-card span{display:block;margin-top:5px;font-size:.85em;}
-  #loadMore{width:100%;padding:10px;margin:10px 0;background:var(--accent);border:none;color:white;font-weight:600;border-radius:6px;cursor:pointer;}
-  #searchBar{
-    width:90%;padding:8px;border-radius:6px;border:none;
-    background:#0d1117;color:white;margin:10px auto;display:block;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Two Buttons</title>
+  <style>
+    :root { --bg:#0b0b0c; --ink:#f4f4f5; --btn:#2563eb; --btnHover:#1d4ed8; }
+    body{margin:0;display:grid;place-items:center;min-height:100dvh;background:var(--bg);font-family:system-ui,Arial}
+    .wrap{display:flex;gap:12px;flex-wrap:wrap}
+    a.btn{
+      appearance:none; text-decoration:none; cursor:pointer;
+      padding:12px 18px; border-radius:10px; font-weight:600;
+      color:var(--ink); background:var(--btn); transition:transform .06s ease, background .15s ease;
+    }
+    a.btn:hover{ background:var(--btnHover); transform:translateY(-1px); }
+    a.btn:active{ transform:translateY(0); }
+  </style>
 </head>
 <body>
-<header>🎬 IPTV Downloader</header>
-<main>
-  <div id="login">
-    <h3>Login</h3>
-    <input id="host" placeholder="Host (e.g. http://line.rs6ott.com:8080)">
-    <input id="username" placeholder="Username">
-    <input type="password" id="password" placeholder="Password">
-    <button id="connect">Connect</button>
+  <div class="wrap">
+    <a class="btn" href="index1.html">Go to index1.html</a>
+    <a class="btn" href="index2.html">Go to index2.html</a>
   </div>
-
-  <div id="menu" style="display:none">
-    <h3>Welcome</h3>
-    <button id="moviesBtn">🎬 Movies</button>
-    <button id="logout">Logout</button>
-  </div>
-
-  <div id="movieGrid">
-    <input id="searchBar" placeholder="Search movies...">
-  </div>
-</main>
-
-<script>
-const loginBox=document.getElementById('login'),
-      menuBox=document.getElementById('menu'),
-      movieGrid=document.getElementById('movieGrid');
-
-let host,user,pass,movies=[],filtered=[],page=0,pageSize=5;
-
-document.getElementById('connect').onclick=async()=>{
-  host=document.getElementById('host').value.trim().replace(/\/$/,'');
-  user=document.getElementById('username').value.trim();
-  pass=document.getElementById('password').value.trim();
-  if(!host||!user||!pass)return alert("Enter all fields");
-  const api=`https://corsproxy.io/?${encodeURIComponent(host+'/player_api.php?username='+user+'&password='+pass)}`;
-  try{
-    const res=await fetch(api);const data=await res.json();
-    if(data.user_info&&data.user_info.auth==1){
-      loginBox.style.display='none';menuBox.style.display='flex';
-    }else alert("Invalid login");
-  }catch(e){alert("Cannot connect");}
-};
-
-document.getElementById('moviesBtn').onclick=()=>loadMovies();
-document.getElementById('logout').onclick=()=>location.reload();
-
-async function loadMovies(){
-  menuBox.style.display='none';
-  movieGrid.style.display='flex';
-  movieGrid.innerHTML='<input id="searchBar" placeholder="Search movies..."><p>Loading movies...</p>';
-  const url=`https://corsproxy.io/?${encodeURIComponent(host+'/player_api.php?username='+user+'&password='+pass+'&action=get_vod_streams')}`;
-  try{
-    const res=await fetch(url);
-    movies=await res.json();
-    filtered=[...movies];
-    page=0;
-    renderMovies();
-    document.getElementById('searchBar').addEventListener('input',()=>{
-      const term=document.getElementById('searchBar').value.toLowerCase();
-      filtered=movies.filter(m=>m.name.toLowerCase().includes(term));
-      page=0;renderMovies();
-    });
-  }catch(e){console.error(e);alert("Failed to load movies");}
-}
-
-function renderMovies(){
-  const search=document.getElementById('searchBar');
-  movieGrid.innerHTML=''; movieGrid.appendChild(search);
-  const slice=filtered.slice(page*pageSize,(page+1)*pageSize);
-  slice.forEach(m=>{
-    const card=document.createElement('div');card.className='movie-card';
-    const img=document.createElement('img');
-    img.src=m.stream_icon&&m.stream_icon!=="null"?m.stream_icon:"https://via.placeholder.com/140x200?text=No+Image";
-    const title=document.createElement('span');title.textContent=m.name;
-    card.appendChild(img);card.appendChild(title);
-
-    // ✅ Download instead of streaming
-    const dlLink=document.createElement('a');
-    dlLink.textContent='⬇️ Download';
-    dlLink.style.display='block';
-    dlLink.style.color='#2f81f7';
-    dlLink.style.fontWeight='600';
-    dlLink.href=`${host}/movie/${user}/${pass}/${m.stream_id}.mp4`;
-    dlLink.download=m.name+".mp4";
-    dlLink.target='_blank';
-    card.appendChild(dlLink);
-
-    movieGrid.appendChild(card);
-  });
-
-  if((page+1)*pageSize<filtered.length){
-    const more=document.createElement('button');
-    more.id='loadMore';more.textContent='Load More';
-    more.onclick=()=>{page++;renderMovies();};
-    movieGrid.appendChild(more);
-  }
-}
-</script>
 </body>
 </html>
+
