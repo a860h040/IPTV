@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title> — Open Direct Link</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --accent:#2f81f7; --text:#e6edf3; --muted:#9aa7b0; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,"Inter",-apple-system,Segoe UI,Roboto,Helvetica,Arial;display:flex;flex-direction:column;min-height:100vh}
+  header{background:var(--panel);padding:10px 20px;font-weight:700;color:var(--accent);text-align:center;border-bottom:1px solid #30363d}
+  main{flex:1;display:flex}
+  #left{width:320px;background:var(--panel);padding:16px;display:flex;flex-direction:column;gap:10px;border-right:1px solid #30363d}
+  input,button{border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;padding:10px}
+  button{background:var(--accent);border:none;font-weight:700;cursor:pointer}
+  button.ghost{background:#1c2128;border:1px solid #30363d}
+  label{font-size:.85rem;color:var(--muted)}
+  .row{display:flex;gap:8px;align-items:center}
+  .hint{color:var(--muted);font-size:.85rem}
+  #right{flex:1;display:flex;flex-direction:column}
+  #toolbar{display:none;gap:10px;padding:10px;background:var(--panel);border-bottom:1px solid #30363d;align-items:center}
+  #search{flex:1;min-width:220px}
+  #grid{display:flex;flex-wrap:wrap;gap:12px;padding:12px;overflow:auto}
+  .card{width:160px;background:#0f141a;border:1px solid #232a31;border-radius:10px;padding:8px}
+  .thumb{width:100%;height:200px;object-fit:cover;border-radius:8px;background:#0b0f14}
+  .title{display:block;margin-top:6px;font-size:.95em}
+  .meta{color:var(--muted);font-size:.8em}
+  .rowbtn{display:flex;gap:6px;justify-content:center;margin-top:6px}
+  .btn{display:inline-block;padding:6px 8px;border-radius:6px;font-weight:700;text-decoration:none}
+  .btn.primary{background:var(--accent);color:white;border:none}
+  .btn.ghost{background:#1c2128;color:#c9d1d9;border:1px solid #30363d}
+  #loadMore{width:100%;padding:10px;margin:10px 0;background:var(--accent);border:none;color:white;font-weight:700;border-radius:8px;cursor:pointer}
+  #status{font-size:.85rem;color:var(--muted);padding-top:6px;min-height:22px}
+  .pill{display:inline-block;background:#1c2128;border:1px solid #30363d;border-radius:999px;padding:3px 8px;margin-right:6px}
+  .ok{color:#22c55e;border-color:#1e3f2b;background:#0f1a13}
+  .err{color:#ef4444;border-color:#3a1214;background:#140a0b}
+</style>
+</head>
+<body>
+<header>📺  — Open Direct Link</header>
+<main>
+  <!-- LEFT: Login + Navigation -->
+  <aside id="left">
+    <strong>Login</strong>
+    <input id="host" placeholder="Host (e.g. http://line.rs6ott.com:8080)">
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
+    <button id="connect">Connect</button>
+    <div id="status"></div>
+
+    <hr style="border-color:#30363d;background:#30363d;height:1px;border:0;margin:8px 0"/>
+
+    <strong>Browse</strong>
+    <div class="row" style="gap:6px">
+      <button id="liveBtn" class="ghost">📡 Live TV</button>
+      <button id="moviesBtn" class="ghost">🎬 Movies</button>
+    </div>
+    <button id="logout" class="ghost">Logout</button>
+
+    <div class="hint" style="margin-top:8px">
+      Clicking a channel opens the <b>direct .m3u8 link</b> on a new tab/window and plays from the server.
+      Some browsers may download or ask to open in an external player (VLC), which is expected.
+    </div>
+  </aside>
+
+  <!-- RIGHT: Content -->
+  <section id="right">
+    <div id="toolbar">
+      <input id="search" placeholder="Search…" />
+    </div>
+    <div id="grid"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ===== State ===== */
+const S = {
+  host:'', user:'', pass:'',
+  live:[], vod:[], filtered:[], page:0, size:24,
+  mode:'open' // explicit: clicking opens a new tab with direct server URL
+};
+
+/* ===== UI wiring ===== */
+$('connect').onclick = connect;
+$('logout').onclick = ()=> location.reload();
+$('liveBtn').onclick = ()=> loadLive();
+$('moviesBtn').onclick = ()=> loadMovies();
+$('search').addEventListener('input', doFilter);
+
+const statusEl = $('status'), grid = $('grid');
+
+/* ===== Helpers ===== */
+function toast(msg, kind){
+  statusEl.innerHTML = `<span class="pill ${kind==='ok'?'ok':kind==='err'?'err':''}">${msg}</span>`;
+}
+const trimSlash = s => s.replace(/\/$/,'');
+const apiWrap = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+/* ===== Login ===== */
+async function connect(){
+  S.host = trimSlash($('host').value.trim());
+  S.user = $('username').value.trim();
+  S.pass = $('password').value.trim();
+  if (!S.host || !S.user || !S.pass){ toast('Enter host / username / password', 'err'); return; }
+
+  toast('Connecting…');
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}`;
+    const r = await fetch(apiWrap(url));
+    const data = await r.json().catch(()=> ({}));
+    if (data.user_info && String(data.user_info.auth) === '1'){
+      toast('Login OK','ok'); $('toolbar').style.display='flex';
+    } else { toast('Invalid login','err'); }
+  }catch(e){ toast('Cannot connect (API)','err'); }
+}
+
+/* ===== Browse: Live ===== */
+async function loadLive(){
+  if (!S.host || !S.user || !S.pass){ toast('Login first','err'); return; }
+  grid.innerHTML = '<p style="padding:12px">Loading channels…</p>';
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_live_streams`;
+    const r = await fetch(apiWrap(url));
+    S.live = await r.json(); if (!Array.isArray(S.live)) S.live = [];
+    S.filtered = [...S.live]; S.page=0; paintGrid('live');
+  }catch(e){ toast('Failed to load channels','err'); grid.innerHTML=''; }
+}
+
+/* ===== Browse: Movies ===== */
+async function loadMovies(){
+  if (!S.host || !S.user || !S.pass){ toast('Login first','err'); return; }
+  grid.innerHTML = '<p style="padding:12px">Loading movies…</p>';
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_vod_streams`;
+    const r = await fetch(apiWrap(url));
+    S.vod = await r.json(); if (!Array.isArray(S.vod)) S.vod = [];
+    S.filtered = [...S.vod]; S.page=0; paintGrid('vod');
+  }catch(e){ toast('Failed to load movies','err'); grid.innerHTML=''; }
+}
+
+/* ===== Search ===== */
+function doFilter(){
+  const term = $('search').value.toLowerCase();
+  // If Live was loaded last (has results in filtered that match live), keep it—simple heuristic
+  const list = (S.live.length && (!S.vod.length || S.filtered === S.live)) ? S.live : S.vod.length ? S.vod : S.live;
+  S.filtered = list.filter(x => (x.name||'').toLowerCase().includes(term));
+  S.page = 0; paintGrid(list === S.live ? 'live' : 'vod');
+}
+
+/* ===== Render Cards ===== */
+function paintGrid(kind){
+  grid.innerHTML='';
+  const slice = S.filtered.slice(S.page*S.size, (S.page+1)*S.size);
+  slice.forEach(item=>{
+    const card = document.createElement('div'); card.className='card';
+
+    const img = document.createElement('img'); img.className='thumb';
+    img.src = (item.stream_icon && item.stream_icon !== 'null') ? item.stream_icon : 'https://via.placeholder.com/160x200?text=No+Image';
+    img.onerror = ()=>{ img.src='https://via.placeholder.com/160x200?text=No+Image'; };
+
+    const title = document.createElement('span'); title.className='title'; title.textContent = item.name || 'Untitled';
+    const meta = document.createElement('div'); meta.className='meta';
+    meta.textContent = kind==='live' ? (item.category_name || '') : ((item.container_extension||'mp4').toUpperCase());
+
+    const row = document.createElement('div'); row.className='rowbtn';
+
+    if (kind==='live'){
+      // Build direct server URL and open it in a new tab
+      const m3u8 = `${S.host}/live/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.m3u8`;
+
+      // Whole card opens the link in new tab
+      card.style.cursor = 'pointer';
+      card.onclick = ()=> window.open(m3u8, '_blank');
+
+      // Also show explicit buttons
+      const openBtn = document.createElement('a');
+      openBtn.className = 'btn primary';
+      openBtn.textContent = 'Open Link';
+      openBtn.href = m3u8;
+      openBtn.target = '_blank';
+      openBtn.rel = 'noopener';
+
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'btn ghost';
+      copyBtn.textContent = 'Copy URL';
+      copyBtn.onclick = async (e)=>{ e.stopPropagation(); try{ await navigator.clipboard.writeText(m3u8); copyBtn.textContent='Copied!'; setTimeout(()=>copyBtn.textContent='Copy URL',1200);}catch{} };
+
+      row.appendChild(openBtn); row.appendChild(copyBtn);
+    } else {
+      // Movies: direct MP4 from server
+      const mp4 = `${S.host}/movie/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.mp4`;
+
+      const dl = document.createElement('a'); dl.className='btn primary'; dl.textContent='⬇ Download';
+      dl.href = mp4; dl.download = (item.name||'movie')+'.mp4'; dl.target='_blank'; dl.rel='noopener';
+
+      const open = document.createElement('a'); open.className='btn ghost'; open.textContent='Open MP4';
+      open.href = mp4; open.target='_blank'; open.rel='noopener';
+
+      row.appendChild(dl); row.appendChild(open);
+    }
+
+    card.appendChild(img); card.appendChild(title); card.appendChild(meta); card.appendChild(row);
+    grid.appendChild(card);
+  });
+
+  if ((S.page+1)*S.size < S.filtered.length){
+    const more = document.createElement('button'); more.id='loadMore'; more.textContent='Load More';
+    more.onclick = ()=>{ S.page++; paintGrid(kind); };
+    grid.appendChild(more);
+  }
+}
+</script>
+</body>
+</html>
