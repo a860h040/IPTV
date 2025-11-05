@@ -103,8 +103,12 @@
   <div id="drawerHead">
     <h3 id="seriesTitle">Series</h3>
     <div id="drawerTools">
-      <!-- Minimal addition: Cast device chooser button -->
+      <!-- Device chooser -->
       <google-cast-launcher id="castLauncher" class="btn"></google-cast-launcher>
+      <!-- Quick tests to confirm casting path on your phone -->
+      <button id="testMp4" class="btn ghost">Test MP4</button>
+      <button id="testHls" class="btn ghost">Test HLS</button>
+      <button id="castDiag" class="btn ghost">Cast Diagnostics</button>
       <button id="copyAll" class="btn ghost">Copy All Links</button>
       <button id="downloadM3U" class="btn primary">Download M3U</button>
       <button id="closeDrawer" class="btn ghost">Close</button>
@@ -580,6 +584,27 @@ async function castEpisode(epUrl, title){
     if (typeof setStatus === 'function') setStatus('Cast failed: ' + (e.message || e), 'err');
   }
 }
+// Bind test buttons & diagnostics
+(function(){
+  const mp4 = document.getElementById('testMp4');
+  const hls = document.getElementById('testHls');
+  const diag = document.getElementById('castDiag');
+  if (mp4) mp4.onclick = ()=> castEpisode('https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'Test MP4');
+  if (hls) hls.onclick = ()=> castEpisode('https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8', 'Test HLS');
+  if (diag) diag.onclick = ()=>{
+    const info = {
+      origin: location.origin,
+      protocol: location.protocol,
+      ua: navigator.userAgent,
+      isAndroid: /Android/i.test(navigator.userAgent),
+      isIOS: /iP(hone|ad|od)/i.test(navigator.userAgent) || (/Mac/i.test(navigator.userAgent) && 'ontouchend' in document),
+      castFramework: (window.cast && cast.framework && cast.framework.VERSION) || 'unavailable',
+      chromeCast: (window.chrome && chrome.cast && chrome.cast.VERSION) || 'unavailable'
+    };
+    console.table(info);
+    if (typeof setStatus === 'function') setStatus('Diag printed to console. Ensure phone & Chromecast on same Wi‑Fi.', 'ok');
+  };
+})();
 </script>
 
 <!-- Minimal: Load Cast SDK at the end so it never blocks your login code -->
