@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IPTV — Live · Movies · Series (Categories + Top Favorites)</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --accent:#2f81f7; --text:#e6edf3; --muted:#9aa7b0; --border:#232a31; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Inter,-apple-system,Segoe UI,Roboto,Helvetica,Arial;display:flex;flex-direction:column;min-height:100vh}
+  header{background:var(--panel);padding:10px 20px;font-weight:700;color:var(--accent);text-align:center;border-bottom:1px solid #30363d}
+  main{flex:1;display:grid;grid-template-columns:320px 220px 1fr;gap:0;min-height:0}
+  /* Left login/nav */
+  #left{background:var(--panel);padding:16px;display:flex;flex-direction:column;gap:10px;border-right:1px solid #30363d;min-height:0}
+  input,button{border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;padding:10px}
+  button{background:var(--accent);border:none;font-weight:700;cursor:pointer}
+  button.ghost{background:#1c2128;border:1px solid #30363d}
+  #status{font-size:.85rem;color:var(--muted);padding-top:6px;min-height:22px}
+  .pill{display:inline-block;background:#1c2128;border:1px solid #30363d;border-radius:999px;padding:3px 8px;margin-right:6px}
+  .ok{color:#22c55e;border-color:#1e3f2b;background:#0f1a13}
+  .err{color:#ef4444;border-color:#3a1214;background:#140a0b}
+
+  /* Middle: series categories */
+  #cats{background:#0f141a;border-right:1px solid #30363d;padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+  #cats h4{margin:0 0 6px 0;color:#cbd5e1}
+  .catbtn{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:8px;background:#0b0f14;color:#d1d7df;cursor:pointer}
+  .catbtn.active{border-color:#2f81f7;background:#132036}
+  .badge{font-size:.75rem;color:#a7b0ba;background:#12171d;border:1px solid #26303a;border-radius:999px;padding:2px 6px}
+
+  /* Right: content */
+  #right{display:flex;flex-direction:column;min-width:0;min-height:0}
+  #toolbar{display:none;gap:10px;padding:10px;background:var(--panel);border-bottom:1px solid #30363d;align-items:center}
+  #search{flex:1;min-width:220px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;padding:10px}
+  #grid{display:flex;flex-wrap:wrap;gap:12px;padding:12px;overflow:auto}
+  .card{width:160px;background:#0f141a;border:1px solid var(--border);border-radius:10px;padding:8px;cursor:pointer;position:relative}
+  .thumb{width:100%;height:200px;object-fit:cover;border-radius:8px;background:#0b0f14}
+  .title{display:block;margin-top:6px;font-size:.95em}
+  .meta{color:var(--muted);font-size:.8em}
+  .fav{position:absolute;top:8px;right:8px;background:#1c2128;border:1px solid #30363d;border-radius:999px;padding:4px 8px;font-weight:700;color:#ffd166}
+  .fav.off{color:#9aa7b0}
+
+  /* Series drawer */
+  #drawer{display:none;position:fixed;inset:auto 0 0 0;background:#0b0f14;border-top:1px solid var(--border);max-height:65vh;overflow:auto}
+  #drawerHead{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 12px}
+  #drawer h3{margin:0}
+  #drawerTools{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:6px 8px;border-radius:6px;font-weight:700;text-decoration:none;cursor:pointer}
+  .btn.primary{background:var(--accent);color:white;border:none}
+  .btn.ghost{background:#1c2128;color:#c9d1d9;border:1px solid #30363d}
+  #seasons{padding:10px;display:grid;gap:10px}
+  .season{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .season summary{cursor:pointer;padding:10px;background:#0f141a}
+  .episodes{padding:8px;display:grid;gap:8px}
+  .ep{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;background:#0f141a;border:1px solid var(--border);border-radius:8px;padding:8px}
+  .ep .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .copy{min-width:110px}
+
+  /* Optional style for cast launcher to match theme */
+  google-cast-launcher.btn{display:inline-block;border-radius:6px;font-weight:700;padding:6px 10px;border:1px solid #30363d;background:#1c2128;color:#c9d1d9;cursor:pointer}
+</style>
+</head>
+<body>
+<header>📺 IPTV — Live · Movies · Series (Categories + Top Favorites)</header>
+<main>
+  <!-- LEFT: Login + Nav -->
+  <aside id="left">
+    <strong>Login</strong>
+    <input id="host" placeholder="Host (e.g. http://line.rs6ott.com:8080)">
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
+    <button id="connect">Connect</button>
+    <div id="status"></div>
+
+    <hr style="border-color:#30363d;background:#30363d;height:1px;border:0;margin:8px 0"/>
+    <strong>Browse</strong>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button id="liveBtn" class="ghost">📡 Live TV</button>
+      <button id="moviesBtn" class="ghost">🎬 Movies</button>
+      <button id="seriesBtn" class="ghost">📺 Series</button>
+    </div>
+    <button id="logout" class="ghost">Logout</button>
+  </aside>
+
+  <!-- MIDDLE: Series Categories -->
+  <aside id="cats">
+    <h4>Series Categories</h4>
+    <div id="catList">
+      <!-- Dynamic: All Series, Top Favorites, then server categories -->
+    </div>
+  </aside>
+
+  <!-- RIGHT: Content -->
+  <section id="right">
+    <div id="toolbar">
+      <input id="search" placeholder="Search…" />
+    </div>
+    <div id="grid"></div>
+  </section>
+</main>
+
+<!-- Series drawer -->
+<div id="drawer">
+  <div id="drawerHead">
+    <h3 id="seriesTitle">Series</h3>
+    <div id="drawerTools">
+      <!-- Minimal addition: Cast device chooser button -->
+      <google-cast-launcher id="castLauncher" class="btn"></google-cast-launcher>
+      <button id="copyAll" class="btn ghost">Copy All Links</button>
+      <button id="downloadM3U" class="btn primary">Download M3U</button>
+      <button id="closeDrawer" class="btn ghost">Close</button>
+    </div>
+  </div>
+  <div id="seasons"></div>
+</div>
+
+<script>
+/* ---------- Helpers ---------- */
+const $ = id => document.getElementById(id);
+const trimSlash = s => s.replace(/\/$/,'');
+const apiWrap = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+const placeholderImg = 'https://via.placeholder.com/160x200?text=No+Image';
+function setStatus(msg, kind){ $('status').innerHTML = `<span class="pill ${kind==='ok'?'ok':kind==='err'?'err':''}">${msg}</span>`; }
+function safeName(s){ return (s||'').replace(/[^\w\s\-\.\(\)&]/g,'').trim(); }
+const store = {
+  get favSet(){ return new Set(JSON.parse(localStorage.getItem('fav_series')||'[]')); },
+  set favSet(v){ localStorage.setItem('fav_series', JSON.stringify([...v])); },
+  get favCount(){ return JSON.parse(localStorage.getItem('fav_series_count')||'{}'); },
+  set favCount(v){ localStorage.setItem('fav_series_count', JSON.stringify(v)); },
+};
+
+/* ---------- State ---------- */
+const S = {
+  host:'', user:'', pass:'',
+  live:[], vod:[], series:[], seriesCats:[], // server data
+  filtered:[], kind:'', page:0, size:30,
+  // series UI/state
+  currentSeries: null,
+  currentSeasons: {},
+  currentCat: 'all', // 'all' | 'top' | <category_id>
+};
+
+/* ---------- Login ---------- */
+$('connect').onclick = async () => {
+  S.host = trimSlash(($('host').value||'').trim());
+  S.user = ($('username').value||'').trim();
+  S.pass = ($('password').value||'').trim();
+  if (!S.host || !S.user || !S.pass) return setStatus('Enter host / username / password', 'err');
+
+  setStatus('Connecting…');
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}`;
+    const r = await fetch(apiWrap(url));
+    const data = await r.json();
+    if (data.user_info && String(data.user_info.auth) === '1'){
+      setStatus('Login OK','ok');
+      $('toolbar').style.display='flex';
+    } else setStatus('Invalid login','err');
+  }catch(e){ setStatus('Cannot connect (API)','err'); }
+};
+$('logout').onclick = () => location.reload();
+
+/* ---------- Nav ---------- */
+$('liveBtn').onclick = loadLive;
+$('moviesBtn').onclick = loadMovies;
+$('seriesBtn').onclick = loadSeries;
+$('search').addEventListener('input', ()=>{
+  const term = $('search').value.toLowerCase();
+  const src = S[S.kind] || [];
+  S.filtered = (S.filteredSource || src).filter(x => (x.name||'').toLowerCase().includes(term));
+  S.page = 0; paint();
+});
+
+/* ---------- Loaders ---------- */
+async function loadLive(){
+  requireLogin(); closeDrawer();
+  $('grid').innerHTML = '<p style="padding:12px">Loading channels…</p>'; hideCats();
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_live_streams`;
+    const r = await fetch(apiWrap(url));
+    S.live = await r.json(); if (!Array.isArray(S.live)) S.live = [];
+    S.kind='live'; S.filtered=[...S.live]; S.page=0; paint();
+  }catch(e){ setStatus('Failed to load channels','err'); $('grid').innerHTML=''; }
+}
+
+async function loadMovies(){
+  requireLogin(); closeDrawer();
+  $('grid').innerHTML = '<p style="padding:12px">Loading movies…</p>'; hideCats();
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_vod_streams`;
+    const r = await fetch(apiWrap(url));
+    S.vod = await r.json(); if (!Array.isArray(S.vod)) S.vod = [];
+    S.kind='vod'; S.filtered=[...S.vod]; S.page=0; paint();
+  }catch(e){ setStatus('Failed to load movies','err'); $('grid').innerHTML=''; }
+}
+
+async function loadSeries(){
+  requireLogin(); closeDrawer(); showCatsLoading();
+  $('grid').innerHTML = '<p style="padding:12px">Loading series…</p>';
+  try{
+    // 1) series list
+    const url1 = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series`;
+    const r1 = await fetch(apiWrap(url1));
+    S.series = await r1.json(); if (!Array.isArray(S.series)) S.series = [];
+
+    // 2) categories
+    const url2 = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series_categories`;
+    const r2 = await fetch(apiWrap(url2));
+    S.seriesCats = await r2.json(); if (!Array.isArray(S.seriesCats)) S.seriesCats = [];
+
+    renderCatSidebar(); // build category buttons
+    S.kind='series';
+    applySeriesCategory('all'); // default: All Series
+  }catch(e){
+    setStatus('Failed to load series','err'); $('grid').innerHTML='';
+    renderCatSidebar(); // still render local buttons
+  }
+}
+
+function requireLogin(){
+  if (!S.host || !S.user || !S.pass) throw setStatus('Login first','err');
+}
+
+/* ---------- Category Sidebar ---------- */
+function showCatsLoading(){
+  $('cats').style.display = 'flex';
+  $('catList').innerHTML = '<div class="catbtn">Loading…</div>';
+}
+function showCats(){ $('cats').style.display = 'flex'; }
+function hideCats(){ $('cats').style.display = 'none'; }
+
+function renderCatSidebar(){
+  showCats();
+  const list = $('catList'); list.innerHTML = '';
+
+  const addBtn = (id, label, count, active=false) => {
+    const b = document.createElement('div');
+    b.className = 'catbtn' + (active ? ' active' : '');
+    b.dataset.id = id;
+    b.innerHTML = `<span>${label}</span><span class="badge">${count}</span>`;
+    b.onclick = ()=> applySeriesCategory(id);
+    list.appendChild(b);
+  };
+
+  const favSet = store.favSet;
+  const topCount = [...S.series].filter(s => favSet.has(String(s.series_id))).length;
+
+  // Built-ins
+  addBtn('all', 'All Series', S.series.length, S.currentCat==='all');
+  addBtn('top', 'Top Favorites', topCount, S.currentCat==='top');
+
+  // Server categories
+  S.seriesCats.forEach(c=>{
+    // c.category_id, c.category_name
+    const cnt = S.series.filter(s => String(s.category_id) === String(c.category_id)).length;
+    addBtn(String(c.category_id), c.category_name || 'Category', cnt, S.currentCat===String(c.category_id));
+  });
+}
+
+/* Apply category filter to S.series -> S.filteredSource, then apply search into S.filtered */
+function applySeriesCategory(catId){
+  S.currentCat = catId;
+  const favSet = store.favSet;
+
+  let base = S.series.slice();
+  if (catId === 'top'){
+    // favorites ranked by open count (descending), then by name
+    const counts = store.favCount;
+    base = base.filter(s => favSet.has(String(s.series_id)))
+               .sort((a,b)=>{
+                  const ca = counts[String(a.series_id)] || 0;
+                  const cb = counts[String(b.series_id)] || 0;
+                  if (cb!==ca) return cb - ca;
+                  return (a.name||'').localeCompare(b.name||'');
+               });
+  } else if (catId !== 'all'){
+    base = base.filter(s => String(s.category_id) === String(catId));
+  }
+
+  S.filteredSource = base;
+  // apply search term if any
+  const term = $('search').value.toLowerCase();
+  S.filtered = term ? base.filter(x => (x.name||'').toLowerCase().includes(term)) : base.slice();
+  S.page = 0;
+  paint();
+  highlightActiveCat();
+}
+
+function highlightActiveCat(){
+  const nodes = document.querySelectorAll('#catList .catbtn');
+  nodes.forEach(n => n.classList.toggle('active', n.dataset.id === S.currentCat));
+}
+
+/* ---------- Grid ---------- */
+function paint(){
+  const grid = $('grid'); grid.innerHTML = '';
+  const list = S.filtered.slice(S.page*S.size, (S.page+1)*S.size);
+
+  list.forEach(item=>{
+    const card = document.createElement('div'); card.className='card';
+
+    let imgSrc, title, meta = '';
+    if (S.kind==='live'){
+      imgSrc = (item.stream_icon && item.stream_icon !== 'null') ? item.stream_icon : placeholderImg;
+      title = item.name || 'Channel';
+      meta = item.category_name || '';
+      const m3u8 = `${S.host}/live/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.m3u8`;
+      card.onclick = ()=> window.open(m3u8, '_blank', 'noopener');
+    } else if (S.kind==='vod'){
+      imgSrc = (item.stream_icon && item.stream_icon !== 'null') ? item.stream_icon : placeholderImg;
+      title = item.name || 'Movie';
+      meta = (item.container_extension||'mp4').toUpperCase();
+      const mp4 = `${S.host}/movie/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.mp4`;
+      card.onclick = ()=> window.open(mp4, '_blank', 'noopener');
+    } else {
+      imgSrc = (item.cover && item.cover !== 'null') ? item.cover : (item.stream_icon||placeholderImg);
+      title = item.name || 'Series';
+      meta = item.releaseDate || '';
+
+      // open drawer
+      card.onclick = ()=> openSeries(item);
+
+      // favorite toggle
+      const star = document.createElement('button');
+      star.className = 'fav off';
+      star.textContent = '☆';
+      star.title = 'Toggle favorite';
+      const id = String(item.series_id);
+      if (store.favSet.has(id)) star.classList.remove('off'), star.textContent='★';
+      star.onclick = (e)=>{ e.stopPropagation(); toggleFav(id, star); };
+      card.appendChild(star);
+    }
+
+    const img = document.createElement('img'); img.className='thumb'; img.src = imgSrc; img.onerror = ()=>{ img.src=placeholderImg; };
+    const nameEl = document.createElement('span'); nameEl.className='title'; nameEl.textContent = title;
+    const metaEl = document.createElement('div'); metaEl.className='meta'; metaEl.textContent = meta;
+
+    card.appendChild(img); card.appendChild(nameEl); card.appendChild(metaEl);
+    grid.appendChild(card);
+  });
+
+  if ((S.page+1)*S.size < S.filtered.length){
+    const more = document.createElement('button');
+    more.textContent = 'Load More';
+    more.className = 'ghost';
+    more.style.margin = '10px auto';
+    more.onclick = ()=>{ S.page++; paint(); };
+    grid.appendChild(more);
+  }
+}
+
+/* ---------- Favorites (Series) ---------- */
+function toggleFav(seriesId, btn){
+  const set = store.favSet;
+  if (set.has(seriesId)) { set.delete(seriesId); btn.classList.add('off'); btn.textContent='☆'; }
+  else { set.add(seriesId); btn.classList.remove('off'); btn.textContent='★'; }
+  store.favSet = set;
+  // if we're viewing Top Favorites category, refresh it
+  if (S.kind==='series' && S.currentCat==='top') applySeriesCategory('top');
+}
+
+/* ---------- Series detail (seasons + VLC links) ---------- */
+$('closeDrawer').onclick = ()=> closeDrawer();
+
+$('copyAll').onclick = ()=> {
+  if (!S.currentSeries) return;
+  const links = buildAllEpisodeLinks(S.currentSeasons);
+  copyText(links.join('\n'));
+  flash('Copied all episode links to clipboard');
+};
+$('downloadM3U').onclick = ()=> {
+  if (!S.currentSeries) return;
+  const links = buildAllEpisodeLinks(S.currentSeasons);
+  const m3u = buildM3U(links, S.currentSeries.name);
+  downloadText(m3u, `${safeName(S.currentSeries.name || 'series')}.m3u`);
+};
+
+async function openSeries(serie){
+  $('seriesTitle').textContent = serie.name || 'Series';
+  S.currentSeries = { id: String(serie.series_id), name: serie.name || 'Series' };
+  $('seasons').innerHTML = '<p style="padding:8px">Loading seasons & episodes…</p>';
+  $('drawer').style.display = 'block';
+
+  // increment open count for Top Favorites ranking
+  const counts = store.favCount;
+  counts[S.currentSeries.id] = (counts[S.currentSeries.id] || 0) + 1;
+  store.favCount = counts;
+
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series_info&series_id=${encodeURIComponent(serie.series_id)}`;
+    const r = await fetch(apiWrap(url));
+    const info = await r.json();
+    const episodesBySeason = info.episodes || {};
+    S.currentSeasons = episodesBySeason;
+
+    const seasonsBox = $('seasons'); seasonsBox.innerHTML = '';
+    const seasonNums = Object.keys(episodesBySeason).sort((a,b)=>Number(a)-Number(b));
+
+    if (!seasonNums.length){ seasonsBox.innerHTML = '<p style="padding:8px">No episodes found.</p>'; return; }
+
+    seasonNums.forEach(seasonNo=>{
+      const eps = episodesBySeason[seasonNo] || [];
+      const det = document.createElement('details'); det.className='season';
+      const sum = document.createElement('summary'); sum.textContent = `Season ${seasonNo} • ${eps.length} episode(s)`;
+      const wrap = document.createElement('div'); wrap.className='episodes';
+
+      // Per-season tools
+      const seasonTools = document.createElement('div');
+      seasonTools.style.cssText = 'display:flex;gap:8px;align-items:center;margin:6px 0;';
+      const btnCopySeason = document.createElement('button');
+      btnCopySeason.className='btn ghost'; btnCopySeason.textContent='Copy Season Links';
+      btnCopySeason.onclick = (e)=>{ e.preventDefault(); const links = buildAllEpisodeLinks({[seasonNo]: eps}); copyText(links.join("\n")); flash(`Copied Season ${seasonNo} links`); };
+      const btnM3USeason = document.createElement('button');
+      btnM3USeason.className='btn primary'; btnM3USeason.textContent='Download Season M3U';
+      btnM3USeason.onclick = (e)=>{ e.preventDefault(); const links = buildAllEpisodeLinks({[seasonNo]: eps}); const m3u = buildM3U(links, `${S.currentSeries.name} - S${seasonNo}`); downloadText(m3u, `${safeName(S.currentSeries.name)}_S${seasonNo}.m3u`); };
+      seasonTools.appendChild(btnCopySeason); seasonTools.appendChild(btnM3USeason);
+      wrap.appendChild(seasonTools);
+
+      eps.forEach(ep=>{
+        const row = document.createElement('div'); row.className='ep';
+        const title = document.createElement('div'); title.className='name';
+        title.textContent = ep.title || `Episode ${ep.episode_num || ''}`;
+
+        // Build direct VLC link
+        const ext = (ep.container_extension || 'mp4').replace(/^\./,'');
+        const epUrl = `${S.host}/series/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${ep.id}.${ext}`;
+
+        const open = document.createElement('a'); open.className='btn primary'; open.textContent='Open Link';
+        open.href = epUrl; open.target='_blank'; open.rel='noopener';
+
+        const copy = document.createElement('button'); copy.className='btn ghost copy'; copy.textContent='Copy VLC Link';
+        copy.onclick = async ()=>{ await copyText(epUrl); copy.textContent='Copied!'; setTimeout(()=>copy.textContent='Copy VLC Link', 1200); };
+
+        // Minimal addition: Cast button (does not change any logic)
+        const castBtn = document.createElement('button'); castBtn.className='btn ghost'; castBtn.textContent='Cast';
+        castBtn.title = 'Cast to Chromecast';
+        castBtn.onclick = (e)=>{ e.preventDefault(); castEpisode(epUrl, `${S.currentSeries.name} — ${title.textContent}`); };
+
+        row.appendChild(title); row.appendChild(open); row.appendChild(copy); row.appendChild(castBtn);
+        wrap.appendChild(row);
+      });
+
+      det.appendChild(sum); det.appendChild(wrap);
+      seasonsBox.appendChild(det);
+    });
+
+    // open first season by default
+    const first = seasonsBox.querySelector('details'); if (first) first.open = true;
+
+    // If we're on Top Favorites, refresh badge counts
+    if (S.kind==='series' && S.currentCat==='top') applySeriesCategory('top');
+
+  }catch(e){
+    $('seasons').innerHTML = '<p style="padding:8px">Failed to load episodes.</p>';
+  }
+}
+
+function closeDrawer(){ $('drawer').style.display = 'none'; S.currentSeries=null; S.currentSeasons={}; }
+
+/* ---------- Link builders & utilities ---------- */
+function buildAllEpisodeLinks(bySeason){
+  const links = [];
+  const seasonNums = Object.keys(bySeason).sort((a,b)=>Number(a)-Number(b));
+  seasonNums.forEach(s=>{
+    (bySeason[s]||[]).forEach(ep=>{
+      const ext = (ep.container_extension || 'mp4').replace(/^\./,'');
+      links.push(`${S.host}/series/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${ep.id}.${ext}`);
+    });
+  });
+  return links;
+}
+
+function buildM3U(links, title='Playlist'){
+  let m3u = '#EXTM3U\n';
+  links.forEach((u, i)=>{
+    m3u += `#EXTINF:-1,${title} ${String(i+1).padStart(2,'0')}\n${u}\n`;
+  });
+  return m3u;
+}
+
+async function copyText(txt){
+  try { await navigator.clipboard.writeText(txt); } catch {}
+}
+
+function downloadText(txt, filename){
+  const blob = new Blob([txt], {type:'audio/x-mpegurl'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename || 'playlist.m3u';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+
+// --- Minimal Chromecast helpers (do not touch login/api code) ---
+function guessContentType(url){
+  const u = url.toLowerCase();
+  if (u.includes('.m3u8')) return 'application/x-mpegURL';
+  if (u.includes('.mpd'))  return 'application/dash+xml';
+  if (u.includes('.mp4'))  return 'video/mp4';
+  if (u.includes('.mkv'))  return 'video/x-matroska';
+  if (u.includes('.ts'))   return 'video/mp2t';
+  return 'video/mp4';
+}
+async function castEpisode(epUrl, title){
+  try{
+    if (!/^https?:\/\//i.test(epUrl)) throw new Error('Need a full http(s) URL');
+    const ctx = window.cast?.framework?.CastContext.getInstance();
+    if (!ctx) throw new Error('Cast SDK not ready');
+    let session = ctx.getCurrentSession();
+    if (!session) { await ctx.requestSession(); session = ctx.getCurrentSession(); }
+    if (!session) throw new Error('No cast session');
+
+    const mediaInfo = new chrome.cast.media.MediaInfo(epUrl, guessContentType(epUrl));
+    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
+    mediaInfo.metadata.title = title || 'Episode';
+    mediaInfo.streamType = /\.m3u8($|\?)/i.test(epUrl)
+      ? chrome.cast.media.StreamType.LIVE
+      : chrome.cast.media.StreamType.BUFFERED;
+
+    const req = new chrome.cast.media.LoadRequest(mediaInfo);
+    await session.loadMedia(req);
+    if (typeof setStatus === 'function') setStatus('Casting…','ok');
+  }catch(e){
+    console.error('[CAST] ', e);
+    if (typeof setStatus === 'function') setStatus('Cast failed: ' + (e.message || e), 'err');
+  }
+}
+</script>
+
+<!-- Minimal: Load Cast SDK at the end so it never blocks your login code -->
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" defer></script>
+<script>
+  window.__onGCastApiAvailable = function(isAvailable){
+    if (!isAvailable) return;
+    const ctx = cast.framework.CastContext.getInstance();
+    ctx.setOptions({ receiverApplicationId: 'CC1AD845', autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
+  };
+</script>
+</body>
+</html>
