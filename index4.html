@@ -523,6 +523,24 @@ function guessContentType(url){
   if (u.includes('.ts'))   return 'video/mp2t';
   return 'video/mp4';
 }
+
+// Build casting variants to survive picky servers/codecs
+function buildCastVariants(srcUrl){
+  const urls = new Set();
+  const u = new URL(srcUrl);
+  const base = srcUrl.replace(/\.[a-z0-9]+($|\?)/i, '');
+  const ext = (srcUrl.match(/\.([a-z0-9]+)($|\?)/i)||[])[1]||'';
+  // 1) original
+  urls.add(srcUrl);
+  // 2) common alternates
+  urls.add(base + '.m3u8');
+  urls.add(base + '.mp4');
+  if (ext.toLowerCase() !== 'mkv') urls.add(base + '.mkv');
+  // Also try http->https mirror if page is https (some routers rewrite)
+  if (location.protocol === 'https:' && srcUrl.startsWith('http://')) urls.add(srcUrl.replace('http://','https://'));
+  return [...urls];
+}
+
 async function castEpisode(epUrl, title){
   try{
     if (!/^https?:\/\//i.test(epUrl)) throw new Error('Need a full http(s) URL');
@@ -532,18 +550,33 @@ async function castEpisode(epUrl, title){
     if (!session) { await ctx.requestSession(); session = ctx.getCurrentSession(); }
     if (!session) throw new Error('No cast session');
 
-    const mediaInfo = new chrome.cast.media.MediaInfo(epUrl, guessContentType(epUrl));
-    mediaInfo.metadata = new chrome.cast.media.GenericMediaMetadata();
-    mediaInfo.metadata.title = title || 'Episode';
-    mediaInfo.streamType = /\.m3u8($|\?)/i.test(epUrl)
-      ? chrome.cast.media.StreamType.LIVE
-      : chrome.cast.media.StreamType.BUFFERED;
+    // Try multiple URL/contentType/streamType combos
+    const candidates = buildCastVariants(epUrl);
+    const contentTypes = ['application/x-mpegURL','application/vnd.apple.mpegurl','video/mp4','video/x-matroska','video/mp2t'];
+    const streamTypes = [null, chrome.cast.media.StreamType.BUFFERED, chrome.cast.media.StreamType.LIVE];
 
-    const req = new chrome.cast.media.LoadRequest(mediaInfo);
-    await session.loadMedia(req);
-    if (typeof setStatus === 'function') setStatus('Casting…','ok');
+    for (const url of candidates){
+      for (const ct of contentTypes){
+        for (const st of streamTypes){
+          try{
+            const info = new chrome.cast.media.MediaInfo(url, ct);
+            info.metadata = new chrome.cast.media.GenericMediaMetadata();
+            info.metadata.title = title || 'Episode';
+            if (st !== null) info.streamType = st; // AUTO when null
+            const req = new chrome.cast.media.LoadRequest(info);
+            console.debug('[CAST] trying', {url, ct, st});
+            await session.loadMedia(req);
+            if (typeof setStatus === 'function') setStatus('Casting…','ok');
+            return; // success
+          }catch(inner){
+            console.debug('[CAST] variant failed', inner);
+          }
+        }
+      }
+    }
+    throw new Error('All casting variants failed');
   }catch(e){
-    console.error('[CAST] ', e);
+    console.error('[CAST]', e);
     if (typeof setStatus === 'function') setStatus('Cast failed: ' + (e.message || e), 'err');
   }
 }
