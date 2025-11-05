@@ -128,6 +128,17 @@ const store = {
   set favCount(v){ localStorage.setItem('fav_series_count', JSON.stringify(v)); },
 };
 
+/* ---------- Mobile / Platform detection ---------- */
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_IOS = /iP(hone|ad|od)/i.test(navigator.userAgent) || (/Mac/i.test(navigator.userAgent) && 'ontouchend' in document);
+function applyMobileCastUI(){
+  const launcher = document.getElementById('castLauncher');
+  if (IS_IOS && launcher) launcher.style.display = 'none';
+  if (IS_IOS && typeof setStatus === 'function') {
+    setStatus('Casting from Chrome on iPhone/iPad is not supported by Google. Use Android Chrome or desktop Chrome.', 'err');
+  }
+}
+
 /* ---------- State ---------- */
 const S = {
   host:'', user:'', pass:'',
@@ -431,11 +442,23 @@ async function openSeries(serie){
         copy.onclick = async ()=>{ await copyText(epUrl); copy.textContent='Copied!'; setTimeout(()=>copy.textContent='Copy VLC Link', 1200); };
 
         // Minimal addition: Cast button (does not change any logic)
-        const castBtn = document.createElement('button'); castBtn.className='btn ghost'; castBtn.textContent='Cast';
-        castBtn.title = 'Cast to Chromecast';
-        castBtn.onclick = (e)=>{ e.preventDefault(); castEpisode(epUrl, `${S.currentSeries.name} — ${title.textContent}`); };
+        let actionBtn;
+        if (IS_IOS){
+          actionBtn = document.createElement('button');
+          actionBtn.className = 'btn ghost';
+          actionBtn.textContent = 'Cast (not supported on iOS Chrome)';
+          actionBtn.style.opacity = 0.6;
+          actionBtn.style.cursor = 'not-allowed';
+          actionBtn.title = 'Google does not support web casting from Chrome on iOS.';
+          actionBtn.onclick = (e)=>{ e.preventDefault(); if (typeof setStatus==='function') setStatus('Chrome on iOS cannot cast. Use Android Chrome or desktop Chrome.', 'err'); };
+        } else {
+          actionBtn = document.createElement('button');
+          actionBtn.className='btn ghost'; actionBtn.textContent='Cast';
+          actionBtn.title = 'Cast to Chromecast';
+          actionBtn.onclick = (e)=>{ e.preventDefault(); castEpisode(epUrl, `${S.currentSeries.name} — ${title.textContent}`); };
+        }
 
-        row.appendChild(title); row.appendChild(open); row.appendChild(copy); row.appendChild(castBtn);
+        row.appendChild(title); row.appendChild(open); row.appendChild(copy); row.appendChild(actionBtn);
         wrap.appendChild(row);
       });
 
@@ -535,5 +558,6 @@ async function castEpisode(epUrl, title){
     ctx.setOptions({ receiverApplicationId: 'CC1AD845', autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED });
   };
 </script>
+<script>document.addEventListener('DOMContentLoaded', applyMobileCastUI);</script>
 </body>
 </html>
