@@ -3,110 +3,131 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MKV → MP4 (No Server-Side)</title>
+  <title>MKV → MP4 (No Server)</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:24px;max-width:960px}
-    .card{border:1px solid #ddd;border-radius:14px;padding:14px}
-    label{display:block;font-size:13px;margin:6px 0}
-    input{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:10px}
-    button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
+    :root{--bg:#0d1117;--panel:#161b22;--text:#e6edf3;--muted:#9aa7b0;--accent:#2f81f7;--border:#232a31}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{max-width:1000px;margin:0 auto;padding:20px}
+    h1{margin:0 0 12px 0;font-size:22px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
+    label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
+    input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:#0b1220;color:var(--text)}
+    input[type="file"]{width:100%;color:var(--muted)}
     .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .muted{color:#666;font-size:13px;margin-top:8px;line-height:1.35}
-    pre{background:#f7f7f7;padding:10px;border-radius:10px;overflow:auto;white-space:pre-wrap}
-    a{word-break:break-all}
-    video{width:100%;max-height:420px;background:#000;border-radius:12px;margin-top:10px}
+    button{
+      padding:10px 12px;border-radius:12px;border:1px solid var(--border);
+      background:#0b1220;color:var(--text);cursor:pointer
+    }
+    button.primary{border-color:rgba(47,129,247,.55);background:rgba(47,129,247,.12)}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .status{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.35}
+    .out{margin-top:10px;font-size:13px;color:var(--muted)}
+    a{color:var(--accent);word-break:break-all}
+    video{width:100%;margin-top:12px;border-radius:14px;background:#000;max-height:520px}
+    pre{margin-top:12px;padding:12px;border-radius:14px;background:#0b1220;border:1px solid var(--border);overflow:auto;max-height:260px;color:#d1d5db;font-size:12px;white-space:pre-wrap}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px;margin-left:8px}
   </style>
 </head>
 <body>
-  <h1>MKV → MP4 (client-side)</h1>
+  <div class="wrap">
+    <h1>MKV → MP4 <span class="pill">no server / browser-only</span></h1>
 
-  <div class="card">
-    <label>MKV URL</label>
-    <input id="mkvUrl" value="http://line.tx-4k.com/series/b126a24d3f/36a7e66d5d43/1885218.mkv" />
+    <div class="card">
+      <label>MKV URL (may fail if the host blocks CORS)</label>
+      <input id="mkvUrl" type="text" value="http://line.tx-4k.com/series/b126a24d3f/36a7e66d5d43/1885218.mkv" />
 
-    <div class="row">
-      <button id="loadBtn">Load FFmpeg Core</button>
-      <button id="convertBtn" disabled>Convert to MP4</button>
-      <button id="downloadBtn" disabled>Download MP4</button>
+      <label>Or select a local MKV file (works even if URL is blocked)</label>
+      <input id="fileInput" type="file" accept=".mkv,video/x-matroska,video/*" />
+
+      <div class="row">
+        <button id="loadBtn" class="primary">Load FFmpeg</button>
+        <button id="convertUrlBtn" disabled>Convert URL → MP4</button>
+        <button id="convertFileBtn" disabled>Convert Local MKV File → MP4</button>
+        <button id="downloadBtn" disabled>Download MP4</button>
+      </div>
+
+      <div class="status" id="status">Status: idle</div>
+
+      <div class="out"><strong>MP4 (temporary blob URL):</strong> <a id="outLink" href="#" target="_blank" rel="noopener">—</a></div>
+
+      <video id="player" controls></video>
+
+      <pre id="log">Logs…</pre>
     </div>
-
-    <div class="muted" id="status">Status: idle</div>
-    <div class="muted">
-      Note: This creates a temporary <code>blob:</code> MP4 URL (not a permanent .mp4 link).  
-      If conversion fails instantly, your MKV host is likely blocking CORS.
-    </div>
-
-    <video id="player" controls></video>
-
-    <div class="muted" style="margin-top:10px"><strong>Output (blob URL):</strong></div>
-    <a id="outLink" href="#" target="_blank" rel="noopener">—</a>
-
-    <pre id="log" style="margin-top:10px">Logs will appear here…</pre>
   </div>
 
   <script type="module">
-    // Uses official FFmpeg + toBlobURL approach (docs). :contentReference[oaicite:2]{index=2}
-    import { FFmpeg } from "https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
-    import { fetchFile, toBlobURL } from "https://unpkg.com/@ffmpeg/util@0.12.2/dist/esm/index.js";
+    import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
+    import { fetchFile, toBlobURL } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
 
     const $ = (id) => document.getElementById(id);
+
     const ffmpeg = new FFmpeg();
+    let loaded = false;
 
     let mp4Blob = null;
     let mp4Url = "";
 
     function setStatus(s){ $("status").textContent = "Status: " + s; }
-    function logLine(s){ $("log").textContent += (s + "\n"); }
-
-    ffmpeg.on("log", ({ message }) => logLine(message));
-
-    $("loadBtn").addEventListener("click", async () => {
-      $("log").textContent = "";
-      setStatus("loading ffmpeg core (~tens of MB)…");
-
-      try {
-        // Single-thread core (no SharedArrayBuffer requirements).
-        const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm"; // version list exists on unpkg :contentReference[oaicite:3]{index=3}
-
-        // toBlobURL helps avoid CORS issues for loading core assets. :contentReference[oaicite:4]{index=4}
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        });
-
-        setStatus("ffmpeg loaded ✅");
-        $("convertBtn").disabled = false;
-      } catch (e) {
-        setStatus("error loading ffmpeg ❌");
-        logLine("\nERROR: " + (e?.message || String(e)));
-      }
-    });
-
-    $("convertBtn").addEventListener("click", async () => {
+    function log(s){ $("log").textContent += s + "\n"; }
+    function resetOutput(){
       mp4Blob = null;
+      if (mp4Url) URL.revokeObjectURL(mp4Url);
       mp4Url = "";
-      $("downloadBtn").disabled = true;
       $("outLink").textContent = "—";
       $("outLink").href = "#";
-      $("player").src = "";
+      $("player").removeAttribute("src");
+      $("player").load();
+      $("downloadBtn").disabled = true;
+    }
 
-      const url = $("mkvUrl").value.trim();
-      if (!url) return;
+    ffmpeg.on("log", ({ message }) => log(message));
 
+    async function loadFFmpeg() {
       $("log").textContent = "";
-      setStatus("fetching MKV… (will fail if host blocks CORS)");
+      setStatus("loading ffmpeg (~31MB wasm)…");
 
-      try {
-        // This fetch MUST be allowed by the MKV host via CORS.
-        const inputData = await fetchFile(url);
+      // Use single-thread core (works on GitHub Pages without special headers)
+      const coreBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
+      // This is the wrapper worker from @ffmpeg/ffmpeg (the one that caused your error)
+      const ffmpegBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm";
 
-        setStatus("writing input file…");
-        await ffmpeg.writeFile("input.mkv", inputData);
+      // Blob URLs avoid cross-origin Worker restrictions
+      const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
+        toBlobURL(`${coreBase}/ffmpeg-core.js`, "text/javascript"),
+        toBlobURL(`${coreBase}/ffmpeg-core.wasm`, "application/wasm"),
+        toBlobURL(`${ffmpegBase}/worker.js`, "text/javascript"),
+      ]);
 
-        setStatus("transcoding to MP4…");
-        // Basic MP4 output (H.264 video + AAC audio)
+      await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
+
+      loaded = true;
+      $("convertUrlBtn").disabled = false;
+      $("convertFileBtn").disabled = false;
+      setStatus("ffmpeg loaded ✅");
+    }
+
+    async function runConvert(inputName) {
+      resetOutput();
+      $("log").textContent = "";
+
+      // 1) Try fast remux first (no re-encode). If it fails, fallback to re-encode.
+      const tryRemux = async () => {
+        setStatus("remuxing MKV → MP4 (fast, no re-encode)…");
         await ffmpeg.exec([
-          "-i", "input.mkv",
+          "-i", inputName,
+          "-map", "0",
+          "-c", "copy",
+          "-movflags", "+faststart",
+          "output.mp4"
+        ]);
+      };
+
+      const tryReencode = async () => {
+        setStatus("transcoding MKV → MP4 (re-encode)…");
+        await ffmpeg.exec([
+          "-i", inputName,
           "-c:v", "libx264",
           "-preset", "veryfast",
           "-crf", "23",
@@ -115,6 +136,15 @@
           "-movflags", "+faststart",
           "output.mp4"
         ]);
+      };
+
+      try {
+        try {
+          await tryRemux();
+        } catch (e) {
+          log("\nRemux failed, falling back to re-encode…");
+          await tryReencode();
+        }
 
         setStatus("reading output…");
         const out = await ffmpeg.readFile("output.mp4");
@@ -122,21 +152,62 @@
         mp4Blob = new Blob([out.buffer], { type: "video/mp4" });
         mp4Url = URL.createObjectURL(mp4Blob);
 
-        $("player").src = mp4Url;
         $("outLink").textContent = mp4Url;
         $("outLink").href = mp4Url;
+
+        $("player").src = mp4Url;
         $("downloadBtn").disabled = false;
 
         setStatus("done ✅ (blob URL created)");
       } catch (e) {
         setStatus("conversion failed ❌");
-        logLine("\nERROR: " + (e?.message || String(e)));
-        logLine("\nIf the error mentions CORS, your MKV host is blocking cross-origin download.");
+        log("\nERROR: " + (e?.message || String(e)));
+      }
+    }
+
+    $("loadBtn").addEventListener("click", async () => {
+      try { await loadFFmpeg(); }
+      catch (e) {
+        setStatus("error loading ffmpeg ❌");
+        log("\nERROR: " + (e?.message || String(e)));
+      }
+    });
+
+    $("convertUrlBtn").addEventListener("click", async () => {
+      if (!loaded) return;
+      const url = $("mkvUrl").value.trim();
+      if (!url) return;
+
+      try {
+        setStatus("fetching MKV from URL… (may fail if CORS blocked)");
+        const data = await fetchFile(url); // <-- requires CORS allowed by the MKV host
+        setStatus("writing input file…");
+        await ffmpeg.writeFile("input.mkv", data);
+        await runConvert("input.mkv");
+      } catch (e) {
+        setStatus("URL fetch failed ❌ (likely CORS)");
+        log("\nERROR: " + (e?.message || String(e)));
+        log("\nTip: If the host blocks CORS, use 'Convert Local MKV File' instead.");
+      }
+    });
+
+    $("convertFileBtn").addEventListener("click", async () => {
+      if (!loaded) return;
+      const f = $("fileInput").files?.[0];
+      if (!f) { setStatus("please choose a local MKV file first"); return; }
+
+      try {
+        setStatus("reading local file…");
+        await ffmpeg.writeFile("input.mkv", await fetchFile(f));
+        await runConvert("input.mkv");
+      } catch (e) {
+        setStatus("file conversion failed ❌");
+        log("\nERROR: " + (e?.message || String(e)));
       }
     });
 
     $("downloadBtn").addEventListener("click", () => {
-      if (!mp4Blob) return;
+      if (!mp4Blob || !mp4Url) return;
       const a = document.createElement("a");
       a.href = mp4Url;
       a.download = "converted.mp4";
