@@ -1,220 +1,1429 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MKV → MP4 (No Server)</title>
-  <style>
-    :root{--bg:#0d1117;--panel:#161b22;--text:#e6edf3;--muted:#9aa7b0;--accent:#2f81f7;--border:#232a31}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-    .wrap{max-width:1000px;margin:0 auto;padding:20px}
-    h1{margin:0 0 12px 0;font-size:22px}
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px}
-    label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
-    input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:#0b1220;color:var(--text)}
-    input[type="file"]{width:100%;color:var(--muted)}
-    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    button{
-      padding:10px 12px;border-radius:12px;border:1px solid var(--border);
-      background:#0b1220;color:var(--text);cursor:pointer
-    }
-    button.primary{border-color:rgba(47,129,247,.55);background:rgba(47,129,247,.12)}
-    button:disabled{opacity:.45;cursor:not-allowed}
-    .status{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.35}
-    .out{margin-top:10px;font-size:13px;color:var(--muted)}
-    a{color:var(--accent);word-break:break-all}
-    video{width:100%;margin-top:12px;border-radius:14px;background:#000;max-height:520px}
-    pre{margin-top:12px;padding:12px;border-radius:14px;background:#0b1220;border:1px solid var(--border);overflow:auto;max-height:260px;color:#d1d5db;font-size:12px;white-space:pre-wrap}
-    .pill{display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px;margin-left:8px}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IPTV — Live · Movies · Series (Category Sliders)</title>
+
+<style>
+  :root{
+    --bg:#f5f5f7;
+    --card-bg:#ffffff;
+    --text-main:#1d1d1f;
+    --text-sub:#6e6e73;
+    --accent-blue:#0071e3;
+    --accent-green:#22c55e;
+    --radius-large:26px;
+    --radius-pill:999px;
+    --shadow-soft:0 18px 40px rgba(0,0,0,0.08);
+
+    --border:#e5e7eb;
+    --border-strong:#d1d5db;
+    --focus: rgba(0,113,227,.22);
+    --hover: rgba(0,113,227,.06);
+    --shadow-card-hover: 0 22px 50px rgba(0,0,0,.16);
+
+    --ok-bg: rgba(34,197,94,.10);
+    --ok-bd: rgba(34,197,94,.35);
+    --ok-tx: #15803d;
+
+    --err-bg: rgba(239,68,68,.10);
+    --err-bd: rgba(239,68,68,.35);
+    --err-tx: #b91c1c;
+
+    --warn-bg: rgba(245,158,11,.12);
+    --warn-bd: rgba(245,158,11,.35);
+    --warn-tx: #92400e;
+
+    --overlay: rgba(17,24,39,.55);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text-main);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+    min-height:100vh;
+  }
+
+  /* Header */
+  header{
+    position:sticky;
+    top:0;
+    z-index:50;
+    background:rgba(245,245,247,.86);
+    backdrop-filter: blur(10px);
+    border-bottom:1px solid var(--border);
+  }
+  .hdr{
+    max-width:1400px;
+    margin:0 auto;
+    padding:14px 14px 12px;
+    display:grid;
+    grid-template-columns: 1.3fr 2fr;
+    gap:12px;
+    align-items:start;
+  }
+  .brand{display:flex;flex-direction:column;gap:6px;padding:4px 6px}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:.74rem;letter-spacing:.14em;text-transform:uppercase;color:#4b5563;
+    background:#fff;padding:4px 11px;border-radius:var(--radius-pill);
+    border:1px solid var(--border);width:max-content;
+  }
+  .dot{width:7px;height:7px;border-radius:999px;background:var(--accent-green)}
+  .title{
+    font-size:clamp(1.3rem,2.2vw,1.7rem);
+    font-weight:800;line-height:1.12;
+    background:linear-gradient(90deg,#0071e3,#34c759);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .subtitle{color:var(--text-sub);font-size:.9rem;line-height:1.35}
+
+  .controls{
+    background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius-large);
+    box-shadow:var(--shadow-soft);
+    padding:12px;
+    display:grid;gap:10px;
+  }
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+  input,button,select{
+    border-radius:14px;border:1px solid var(--border-strong);
+    background:#fff;color:var(--text-main);
+    padding:11px 12px;outline:none;font-size:.95rem;
+    transition:box-shadow .15s ease,border-color .15s ease,transform .08s ease,background .15s ease;
+  }
+  input:focus, select:focus{border-color:rgba(0,113,227,.45);box-shadow:0 0 0 4px var(--focus)}
+  button{
+    background:var(--accent-blue);border-color:transparent;color:#fff;font-weight:800;cursor:pointer;
+    box-shadow:0 10px 26px rgba(0,113,227,.25);
+  }
+  button:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(0,113,227,.32)}
+  button:active{transform:translateY(0px) scale(.99)}
+
+  button.ghost{
+    background:#fff;color:var(--text-sub);
+    border:1px solid var(--border-strong);
+    box-shadow:none;font-weight:700;
+  }
+  button.ghost:hover{
+    border-color:rgba(0,113,227,.55);
+    color:var(--accent-blue);
+    background:rgba(0,113,227,.03);
+    box-shadow:0 12px 28px rgba(0,0,0,.10);
+  }
+
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;
+    background:#f9fafb;border:1px solid var(--border);
+    border-radius:var(--radius-pill);
+    padding:5px 10px;font-weight:800;font-size:.9rem;width:max-content;
+  }
+  .ok{color:var(--ok-tx);border-color:var(--ok-bd);background:var(--ok-bg)}
+  .err{color:var(--err-tx);border-color:var(--err-bd);background:var(--err-bg)}
+  .warn{color:var(--warn-tx);border-color:var(--warn-bd);background:var(--warn-bg)}
+
+  #status{min-height:24px;color:var(--text-sub);font-size:.92rem}
+  #search{flex:1;min-width:220px}
+
+  .note{
+    color:var(--text-sub);font-size:.85rem;line-height:1.35;
+    background:#fff;border:1px solid var(--border);border-radius:18px;
+    padding:10px 12px;box-shadow:0 12px 26px rgba(0,0,0,.06);
+  }
+
+  /* Page content */
+  main{max-width:1400px;margin:0 auto;padding:16px 14px 28px}
+  .kindHeader{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:10px 2px 6px}
+  .kindHeader h2{margin:0;font-size:1.05rem;font-weight:900;color:var(--text-main)}
+  .kindHeader .hint{color:var(--text-sub);font-size:.9rem}
+
+  /* Category sections */
+  .catSection{
+    background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius-large);
+    box-shadow:var(--shadow-soft);
+    padding:12px 12px 10px;margin:12px 0;
+  }
+  .catTop{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 6px 10px}
+  .catName{font-weight:900;color:var(--text-main);display:flex;align-items:center;gap:10px}
+  .catMeta{color:var(--text-sub);font-size:.85rem}
+
+  .sliderWrap{position:relative}
+  .track{
+    display:flex;gap:14px;overflow-x:auto;
+    padding:6px 4px 12px;
+    scroll-behavior:smooth;
+    -webkit-overflow-scrolling:touch;
+    scroll-snap-type:x mandatory;
+  }
+  .track::-webkit-scrollbar{height:0}
+
+  .sliderArrow{
+    position:absolute;top:50%;transform:translateY(-50%);
+    width:50px;height:50px;border-radius:999px;border:none;
+    background:rgba(229,231,235,.92);
+    backdrop-filter: blur(6px);
+    box-shadow:0 10px 25px rgba(0,0,0,.14);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;z-index:5;
+    transition:transform .12s ease, box-shadow .18s ease, background .18s ease;
+  }
+  .sliderArrow:hover{
+    background:rgba(229,231,235,1);
+    box-shadow:0 14px 32px rgba(0,0,0,.20);
+    transform:translateY(-50%) scale(1.04);
+  }
+  .sliderArrow:active{transform:translateY(-50%) scale(.96)}
+  .sliderArrow.left{left:8px}
+  .sliderArrow.right{right:8px}
+  .sliderArrow svg{
+    width:20px;height:20px;stroke:#4b5563;stroke-width:3.2;fill:none;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+
+  .card{
+    scroll-snap-align:start;
+    width:170px;flex:0 0 auto;
+    background:var(--card-bg);
+    border:1px solid var(--border);
+    border-radius:22px;
+    padding:10px;cursor:pointer;position:relative;
+    box-shadow:0 12px 26px rgba(0,0,0,.08);
+    transition:transform .14s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+  }
+  .card:hover{
+    transform:translateY(-3px);
+    box-shadow:var(--shadow-card-hover);
+    border-color:rgba(0,113,227,.30);
+    background:rgba(0,113,227,.02);
+  }
+
+  .thumb{
+    width:100%;height:210px;object-fit:cover;
+    border-radius:18px;background:#f3f4f6;border:1px solid var(--border);
+  }
+  .titleTxt{display:block;margin-top:8px;font-size:.98em;font-weight:900;color:var(--text-main)}
+  .metaTxt{color:var(--text-sub);font-size:.82em;margin-top:2px}
+
+  .fav{
+    position:absolute;top:10px;right:10px;
+    background:#fff;border:1px solid var(--border-strong);
+    border-radius:999px;padding:6px 10px;
+    font-weight:900;color:#f59e0b;
+    box-shadow:0 10px 22px rgba(0,0,0,.12);
+  }
+  .fav.off{color:#9ca3af}
+
+  .skeleton{
+    width:170px;height:290px;border-radius:22px;
+    background:linear-gradient(90deg,#f3f4f6,#ffffff,#f3f4f6);
+    border:1px solid var(--border);
+    background-size:200% 100%;
+    animation: shimmer 1.25s infinite linear;
+  }
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .emptyRow{color:var(--text-sub);font-size:.9rem;padding:10px 6px 2px}
+
+  /* Series drawer */
+  #drawer{
+    display:none;position:fixed;inset:auto 16px 16px 16px;
+    background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius-large);
+    box-shadow:0 22px 60px rgba(0,0,0,.18);
+    max-height:70vh;overflow:auto;z-index:999;
+  }
+  #drawerHead{
+    display:flex;align-items:center;gap:10px;justify-content:space-between;
+    padding:12px 14px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:#fff;z-index:2;
+  }
+  #drawer h3{margin:0;font-size:1.05rem;font-weight:900}
+  #drawerTools{display:flex;gap:8px;flex-wrap:wrap}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    padding:8px 12px;border-radius:var(--radius-pill);
+    font-weight:900;cursor:pointer;border:1px solid transparent;
+    transition:transform .10s ease, box-shadow .16s ease, background .16s ease, border-color .16s ease;
+    white-space:nowrap;
+    text-decoration:none;
+  }
+  .btn.primary{
+    background:var(--accent-blue);color:#fff;border-color:rgba(0,113,227,.75);
+    box-shadow:0 10px 26px rgba(0,113,227,.28);
+  }
+  .btn.primary:hover{transform:translateY(-1px);box-shadow:0 16px 32px rgba(0,113,227,.35)}
+  .btn.ghost{
+    background:#fff;color:var(--text-sub);
+    border:1px solid var(--border-strong);
+    box-shadow:none;
+  }
+  .btn.ghost:hover{
+    border-color:rgba(0,113,227,.55);
+    color:var(--accent-blue);
+    background:rgba(0,113,227,.03);
+    box-shadow:0 12px 28px rgba(0,0,0,.10);
+    transform:translateY(-1px);
+  }
+
+  #seasons{padding:12px 14px 14px;display:grid;gap:12px}
+  .season{border:1px solid var(--border);border-radius:22px;overflow:hidden;background:#fff;box-shadow:0 14px 30px rgba(0,0,0,.08)}
+  .season summary{cursor:pointer;padding:12px 14px;background:rgba(0,113,227,.04);font-weight:900;border-bottom:1px solid var(--border)}
+  .episodes{padding:12px;display:grid;gap:10px;background:#fff}
+
+  .ep{
+    display:grid;
+    grid-template-columns:1fr auto auto auto;
+    gap:8px;align-items:center;
+    background:#fff;border:1px solid var(--border);
+    border-radius:18px;padding:10px;
+    box-shadow:0 10px 22px rgba(0,0,0,.06);
+  }
+  .ep .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:900;color:var(--text-main)}
+  .copy{min-width:130px}
+
+  /* =========================
+     Improved Player Modal
+  ========================= */
+  #playerModal{
+    display:none;
+    position:fixed; inset:0;
+    background:var(--overlay);
+    backdrop-filter: blur(10px);
+    z-index:1000;
+    padding:16px;
+  }
+
+  .pmShell{
+    max-width:1220px;
+    margin:0 auto;
+    display:grid;
+    gap:12px;
+  }
+
+  .pmCard{
+    background:#fff;
+    border:1px solid rgba(229,231,235,.9);
+    border-radius:28px;
+    box-shadow:0 28px 90px rgba(0,0,0,.28);
+    overflow:hidden;
+  }
+
+  .pmHead{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 14px;
+    background:rgba(245,245,247,.92);
+    border-bottom:1px solid var(--border);
+  }
+
+  .pmTitle{
+    min-width:0;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  .pmTitle .big{
+    font-weight:900; font-size:1.02rem;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .pmTitle .small{
+    color:var(--text-sub);
+    font-size:.85rem;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  .pmTools{
+    display:flex; gap:8px; flex-wrap:wrap;
+    justify-content:flex-end;
+    align-items:center;
+  }
+  .pmTools .mini{
+    padding:8px 12px;
+    border-radius:var(--radius-pill);
+    font-weight:900;
+  }
+
+  .pmBody{
+    position:relative;
+    padding:12px;
+    background:linear-gradient(180deg, rgba(0,113,227,.03), rgba(255,255,255,0));
+  }
+
+  .pmVideoWrap{
+    position:relative;
+    border-radius:22px;
+    overflow:hidden;
+    border:1px solid rgba(229,231,235,.9);
+    background:#000;
+  }
+
+  #player{
+    width:100%;
+    max-height:74vh;
+    display:block;
+    background:#000;
+  }
+
+  .pmOverlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .18s ease;
+  }
+  .pmOverlay.show{ opacity:1; }
+  .pmOverlay .bubble{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+    border-radius:999px;
+    background:rgba(255,255,255,.92);
+    color:#111827;
+    box-shadow:0 18px 60px rgba(0,0,0,.35);
+    border:1px solid rgba(229,231,235,.9);
+    font-weight:900;
+  }
+  .spinner{
+    width:18px;height:18px;border-radius:999px;
+    border:3px solid rgba(17,24,39,.15);
+    border-top-color: rgba(0,113,227,.9);
+    animation: spin .9s linear infinite;
+  }
+  @keyframes spin { to{ transform: rotate(360deg); } }
+
+  .pmFooter{
+    margin-top:10px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+  }
+
+  .pmHint{
+    color:var(--text-sub);
+    font-size:.88rem;
+    line-height:1.35;
+  }
+
+  .pmPills{
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  }
+
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 10px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:#fff;
+    color:var(--text-sub);
+    font-weight:900;
+    font-size:.85rem;
+  }
+  .chip strong{ color:var(--text-main); }
+
+  /* Small control selects */
+  .pmSelect{
+    padding:8px 10px;
+    border-radius:999px;
+    font-weight:900;
+    border:1px solid var(--border-strong);
+    background:#fff;
+    color:var(--text-main);
+  }
+
+  /* Error panel */
+  .pmError{
+    display:none;
+    margin-top:10px;
+    border-radius:22px;
+    border:1px solid var(--err-bd);
+    background:var(--err-bg);
+    color:var(--err-tx);
+    padding:10px 12px;
+    font-weight:900;
+  }
+
+  @media (max-width:1050px){
+    .hdr{grid-template-columns:1fr}
+    .controls{border-radius:22px}
+  }
+  @media (max-width:760px){
+    .sliderArrow{width:46px;height:46px}
+    .card,.skeleton{width:160px}
+    .thumb{height:190px}
+    #drawer{inset:auto 10px 10px 10px}
+    .ep{grid-template-columns:1fr}
+    .copy{min-width:auto}
+
+    #playerModal{padding:10px}
+    .pmTools{justify-content:flex-start}
+    #player{max-height:62vh}
+  }
+</style>
 </head>
+
 <body>
-  <div class="wrap">
-    <h1>MKV → MP4 <span class="pill">no server / browser-only</span></h1>
+<header>
+  <div class="hdr">
+    <div class="brand">
+      <div class="eyebrow"><span class="dot"></span>IPTV · LIVE · MOVIES · SERIES</div>
+      <div class="title">IPTV Browser</div>
+      <div class="subtitle">Click any card to play inside the page (improved player).</div>
+    </div>
 
-    <div class="card">
-      <label>MKV URL (may fail if the host blocks CORS)</label>
-      <input id="mkvUrl" type="text" value="http://line.tx-4k.com/series/b126a24d3f/36a7e66d5d43/1885218.mkv" />
-
-      <label>Or select a local MKV file (works even if URL is blocked)</label>
-      <input id="fileInput" type="file" accept=".mkv,video/x-matroska,video/*" />
-
+    <div class="controls">
       <div class="row">
-        <button id="loadBtn" class="primary">Load FFmpeg</button>
-        <button id="convertUrlBtn" disabled>Convert URL → MP4</button>
-        <button id="convertFileBtn" disabled>Convert Local MKV File → MP4</button>
-        <button id="downloadBtn" disabled>Download MP4</button>
+        <input id="host" value="http://line.tx-4k.com" placeholder="Host (e.g. http://line.tx-4k.com)" style="flex:1;min-width:260px">
+        <input id="username" value="b126a24d3" placeholder="Username" style="min-width:180px">
+        <input id="password" type="password" value="36a7e66d5d" placeholder="Password" style="min-width:180px">
+        <button id="connect">Connect</button>
+        <button id="logout" class="ghost" type="button">Logout</button>
       </div>
 
-      <div class="status" id="status">Status: idle</div>
+      <div class="row">
+        <button id="liveBtn" class="ghost" type="button">📡 Live TV</button>
+        <button id="moviesBtn" class="ghost" type="button">🎬 Movies</button>
+        <button id="seriesBtn" class="ghost" type="button">📺 Series</button>
+        <input id="search" placeholder="Search loaded items…" />
+      </div>
 
-      <div class="out"><strong>MP4 (temporary blob URL):</strong> <a id="outLink" href="#" target="_blank" rel="noopener">—</a></div>
-
-      <video id="player" controls></video>
-
-      <pre id="log">Logs…</pre>
+      <div class="row" style="justify-content:space-between;gap:10px">
+        <div id="status"></div>
+        <div class="note" style="max-width:560px">
+          <span class="pill warn">Note</span>
+          Public CORS proxies can see your username/password (because they’re in the URL). Best fix is running your own proxy.
+        </div>
+      </div>
     </div>
   </div>
+</header>
 
-  <script type="module">
-    import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
-    import { fetchFile, toBlobURL } from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js";
+<main>
+  <div class="kindHeader">
+    <h2 id="kindTitle">Not connected</h2>
+    <div class="hint" id="kindHint">Connect, then choose Live / Movies / Series.</div>
+  </div>
 
-    const $ = (id) => document.getElementById(id);
+  <div id="sections"></div>
+</main>
 
-    const ffmpeg = new FFmpeg();
-    let loaded = false;
+<!-- Series drawer -->
+<div id="drawer">
+  <div id="drawerHead">
+    <h3 id="seriesTitle">Series</h3>
+    <div id="drawerTools">
+      <button id="copyAll" class="btn ghost" type="button">Copy All Links</button>
+      <button id="downloadM3U" class="btn primary" type="button">Download M3U</button>
+      <button id="closeDrawer" class="btn ghost" type="button">Close</button>
+    </div>
+  </div>
+  <div id="seasons"></div>
+</div>
 
-    let mp4Blob = null;
-    let mp4Url = "";
+<!-- Improved Player modal -->
+<div id="playerModal" aria-hidden="true">
+  <div class="pmShell">
+    <div class="pmCard" role="dialog" aria-modal="true">
+      <div class="pmHead">
+        <div class="pmTitle">
+          <div class="big" id="pmBig">Player</div>
+          <div class="small" id="pmSmall"></div>
+        </div>
 
-    function setStatus(s){ $("status").textContent = "Status: " + s; }
-    function log(s){ $("log").textContent += s + "\n"; }
-    function resetOutput(){
-      mp4Blob = null;
-      if (mp4Url) URL.revokeObjectURL(mp4Url);
-      mp4Url = "";
-      $("outLink").textContent = "—";
-      $("outLink").href = "#";
-      $("player").removeAttribute("src");
-      $("player").load();
-      $("downloadBtn").disabled = true;
+        <div class="pmTools">
+          <select id="pmQuality" class="pmSelect" title="Quality" style="display:none"></select>
+          <select id="pmSpeed" class="pmSelect" title="Speed">
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1" selected>1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+          <button id="pmPip" class="btn ghost mini" type="button" title="Picture-in-Picture">PiP</button>
+          <button id="pmFs" class="btn ghost mini" type="button" title="Fullscreen">Fullscreen</button>
+          <button id="pmCopy" class="btn ghost mini" type="button">Copy</button>
+          <a id="pmOpen" class="btn ghost mini" href="#" target="_blank" rel="noopener">Open</a>
+          <button id="pmRetry" class="btn ghost mini" type="button" style="display:none">Retry</button>
+          <button id="pmClose" class="btn primary mini" type="button">Close</button>
+        </div>
+      </div>
+
+      <div class="pmBody">
+        <div class="pmVideoWrap" id="pmVideoWrap">
+          <video id="player" controls autoplay playsinline></video>
+
+          <div class="pmOverlay" id="pmOverlay">
+            <div class="bubble">
+              <div class="spinner"></div>
+              <div id="pmOverlayText">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pmError" id="pmError"></div>
+
+        <div class="pmFooter">
+          <div class="pmHint" id="pmHint">
+            Shortcuts: Space play/pause · ←/→ seek · M mute · F fullscreen · Esc close
+          </div>
+          <div class="pmPills">
+            <div class="chip">Type: <strong id="pmType">—</strong></div>
+            <div class="chip">Status: <strong id="pmStatus">—</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HLS support -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<script>
+/* ---------------- Helpers ---------------- */
+const $ = id => document.getElementById(id);
+const trimSlash = s => s.replace(/\/$/,'');
+const placeholderImg = 'https://via.placeholder.com/160x200?text=No+Image';
+
+function setStatus(msg, kind){
+  $('status').innerHTML = msg ? `<span class="pill ${kind==='ok'?'ok':kind==='err'?'err':kind==='warn'?'warn':''}">${msg}</span>` : '';
+}
+
+function safeName(s){ return (s||'').replace(/[^\w\s\-\.\(\)&]/g,'').trim(); }
+
+function pickJsonText(text){
+  const iObj = text.indexOf('{');
+  const iArr = text.indexOf('[');
+  let i = -1;
+  if (iArr !== -1 && (iObj === -1 || iArr < iObj)) i = iArr;
+  else i = iObj;
+  return i === -1 ? text : text.slice(i);
+}
+
+/* Proxy note: public proxies can see credentials. */
+const PROXY_MODE = 'public'; // 'public' | 'none' | 'self'
+const PROXY_BASE = '';       // e.g. 'http://localhost:8787/'
+
+function wrapUrl(url){
+  if (PROXY_MODE === 'none') return url;
+  if (PROXY_MODE === 'self') return PROXY_BASE + url;
+  return url;
+}
+
+async function fetchJsonRobust(url){
+  const direct = wrapUrl(url);
+  const publicTries = [
+    direct,
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    `https://cors.isomorphic-git.org/${url}`
+  ];
+  const tries = (PROXY_MODE === 'public') ? publicTries : [direct];
+
+  let lastErr = null;
+  for (const u of tries){
+    try{
+      const r = await fetch(u, { cache:'no-store' });
+      const text = await r.text();
+      const cleaned = pickJsonText(text);
+      if (!r.ok) throw new Error(`HTTP ${r.status} :: ${cleaned.slice(0,180)}`);
+      return JSON.parse(cleaned);
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('Unknown fetch error');
+}
+
+/* ---------------- Category ordering: |EN| first, |AR| second, then rest ---------------- */
+function normCatName(s){ return String(s || '').toUpperCase().replace(/\s+/g,''); }
+function orderCategories(cats){
+  const en = [], ar = [], other = [];
+  for (const c of (cats || [])){
+    const name = normCatName(c?.category_name);
+    if (name.startsWith('|EN|')) en.push(c);
+    else if (name.startsWith('|AR|')) ar.push(c);
+    else other.push(c);
+  }
+  return [...en, ...ar, ...other];
+}
+
+/* ---------------- Local Storage (Favorites) ---------------- */
+const store = {
+  get favSeries(){ return JSON.parse(localStorage.getItem('fav_series_map')||'{}'); },
+  set favSeries(v){ localStorage.setItem('fav_series_map', JSON.stringify(v)); },
+  get favCount(){ return JSON.parse(localStorage.getItem('fav_series_count')||'{}'); },
+  set favCount(v){ localStorage.setItem('fav_series_count', JSON.stringify(v)); },
+};
+
+/* ---------------- State ---------------- */
+const S = {
+  host:'', user:'', pass:'',
+  kind:'',
+  categories:[],
+  catItems: new Map(),
+  catItemsRaw: new Map(),
+  catNodes: new Map(),
+  io: null,
+
+  currentSeries: null,
+  currentSeasons: {},
+
+  // player
+  currentPlayUrl: '',
+  currentPlayTitle: '',
+  currentPlaySub: '',
+  hls: null,
+  lastPlayWasM3U8: false,
+};
+
+/* =========================
+   Improved Player Logic
+========================= */
+const v = $('player');
+const overlay = $('pmOverlay');
+const overlayText = $('pmOverlayText');
+const pmError = $('pmError');
+const pmQuality = $('pmQuality');
+const pmRetry = $('pmRetry');
+
+function setPlayerPillStatus(txt){ $('pmStatus').textContent = txt || '—'; }
+function setPlayerPillType(txt){ $('pmType').textContent = txt || '—'; }
+
+function showOverlay(text){
+  overlayText.textContent = text || 'Loading…';
+  overlay.classList.add('show');
+}
+function hideOverlay(){ overlay.classList.remove('show'); }
+
+function showError(msg){
+  pmError.style.display = 'block';
+  pmError.textContent = msg || 'Playback failed.';
+  pmRetry.style.display = 'inline-flex';
+  setPlayerPillStatus('Error');
+}
+function clearError(){
+  pmError.style.display = 'none';
+  pmError.textContent = '';
+  pmRetry.style.display = 'none';
+}
+
+function stopPlayer(){
+  try{ v.pause(); }catch{}
+  v.removeAttribute('src');
+  v.load();
+
+  if (S.hls){
+    try{ S.hls.destroy(); }catch{}
+    S.hls = null;
+  }
+  S.lastPlayWasM3U8 = false;
+  S.currentPlayUrl = '';
+  pmQuality.style.display = 'none';
+  pmQuality.innerHTML = '';
+}
+
+function openPlayerModal(title, sub, url){
+  $('pmBig').textContent = title || 'Player';
+  $('pmSmall').textContent = sub || '';
+  $('pmOpen').href = url || '#';
+  $('playerModal').style.display = 'block';
+  $('playerModal').setAttribute('aria-hidden','false');
+}
+
+function closePlayerModal(){
+  $('playerModal').style.display = 'none';
+  $('playerModal').setAttribute('aria-hidden','true');
+  stopPlayer();
+}
+
+$('pmClose').onclick = closePlayerModal;
+$('playerModal').addEventListener('click', (e)=>{
+  if (e.target === $('playerModal')) closePlayerModal();
+});
+
+function isM3U8(url){ return /\.m3u8(\?|$)/i.test(url); }
+
+function rememberVolume(){
+  try{ localStorage.setItem('pm_vol', String(v.volume)); }catch{}
+}
+function loadRememberedVolume(){
+  const saved = localStorage.getItem('pm_vol');
+  if (saved !== null){
+    const num = Number(saved);
+    if (!Number.isNaN(num)) v.volume = Math.min(1, Math.max(0, num));
+  } else {
+    v.volume = 0.9;
+  }
+}
+
+function buildQualityMenuFromHls(hls){
+  const levels = hls.levels || [];
+  if (!levels.length) return;
+
+  pmQuality.style.display = 'inline-flex';
+  pmQuality.innerHTML = '';
+
+  const optAuto = document.createElement('option');
+  optAuto.value = '-1';
+  optAuto.textContent = 'Auto';
+  pmQuality.appendChild(optAuto);
+
+  levels.forEach((lvl, idx)=>{
+    const h = lvl.height || '';
+    const br = lvl.bitrate ? Math.round(lvl.bitrate/1000) : '';
+    const label = h ? `${h}p${br ? ' · '+br+'kbps' : ''}` : `Level ${idx}`;
+    const o = document.createElement('option');
+    o.value = String(idx);
+    o.textContent = label;
+    pmQuality.appendChild(o);
+  });
+
+  pmQuality.value = String(hls.currentLevel ?? -1);
+
+  pmQuality.onchange = ()=>{
+    const val = Number(pmQuality.value);
+    // -1 = auto
+    hls.currentLevel = val;
+    hls.loadLevel = val;
+  };
+}
+
+async function playUrlInPage(url, title, sub){
+  if (!url) return;
+
+  S.currentPlayUrl = url;
+  S.currentPlayTitle = title || '';
+  S.currentPlaySub = sub || '';
+
+  openPlayerModal(title, sub, url);
+  clearError();
+  showOverlay('Loading…');
+  setPlayerPillStatus('Loading');
+  setPlayerPillType(isM3U8(url) ? 'HLS (.m3u8)' : 'Direct Video');
+
+  stopPlayer(); // clean start
+  loadRememberedVolume();
+
+  const m3u8 = isM3U8(url);
+  S.lastPlayWasM3U8 = m3u8;
+
+  // HLS (.m3u8)
+  if (m3u8){
+    // Native HLS (Safari)
+    if (v.canPlayType('application/vnd.apple.mpegurl')){
+      v.src = url;
+      try{ await v.play(); }catch{}
+      return;
     }
 
-    ffmpeg.on("log", ({ message }) => log(message));
+    // hls.js path
+    if (window.Hls && window.Hls.isSupported()){
+      S.hls = new Hls({
+        enableWorker:true,
+        lowLatencyMode:true,
+        backBufferLength: 90,
+        maxBufferLength: 30
+      });
 
-    async function loadFFmpeg() {
-      $("log").textContent = "";
-      setStatus("loading ffmpeg (~31MB wasm)…");
-
-      // Use single-thread core (works on GitHub Pages without special headers)
-      const coreBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-      // This is the wrapper worker from @ffmpeg/ffmpeg (the one that caused your error)
-      const ffmpegBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm";
-
-      // Blob URLs avoid cross-origin Worker restrictions
-      const [coreURL, wasmURL, classWorkerURL] = await Promise.all([
-        toBlobURL(`${coreBase}/ffmpeg-core.js`, "text/javascript"),
-        toBlobURL(`${coreBase}/ffmpeg-core.wasm`, "application/wasm"),
-        toBlobURL(`${ffmpegBase}/worker.js`, "text/javascript"),
-      ]);
-
-      await ffmpeg.load({ coreURL, wasmURL, classWorkerURL });
-
-      loaded = true;
-      $("convertUrlBtn").disabled = false;
-      $("convertFileBtn").disabled = false;
-      setStatus("ffmpeg loaded ✅");
-    }
-
-    async function runConvert(inputName) {
-      resetOutput();
-      $("log").textContent = "";
-
-      // 1) Try fast remux first (no re-encode). If it fails, fallback to re-encode.
-      const tryRemux = async () => {
-        setStatus("remuxing MKV → MP4 (fast, no re-encode)…");
-        await ffmpeg.exec([
-          "-i", inputName,
-          "-map", "0",
-          "-c", "copy",
-          "-movflags", "+faststart",
-          "output.mp4"
-        ]);
-      };
-
-      const tryReencode = async () => {
-        setStatus("transcoding MKV → MP4 (re-encode)…");
-        await ffmpeg.exec([
-          "-i", inputName,
-          "-c:v", "libx264",
-          "-preset", "veryfast",
-          "-crf", "23",
-          "-c:a", "aac",
-          "-b:a", "128k",
-          "-movflags", "+faststart",
-          "output.mp4"
-        ]);
-      };
-
-      try {
-        try {
-          await tryRemux();
-        } catch (e) {
-          log("\nRemux failed, falling back to re-encode…");
-          await tryReencode();
+      S.hls.attachMedia(v);
+      S.hls.on(Hls.Events.MEDIA_ATTACHED, ()=>{
+        try{
+          S.hls.loadSource(url);
+        }catch(e){
+          console.warn(e);
+          showError('Failed to load HLS source.');
         }
+      });
 
-        setStatus("reading output…");
-        const out = await ffmpeg.readFile("output.mp4");
+      S.hls.on(Hls.Events.MANIFEST_PARSED, ()=>{
+        buildQualityMenuFromHls(S.hls);
+        hideOverlay();
+        setPlayerPillStatus('Ready');
+        v.play().catch(()=>{});
+      });
 
-        mp4Blob = new Blob([out.buffer], { type: "video/mp4" });
-        mp4Url = URL.createObjectURL(mp4Blob);
+      S.hls.on(Hls.Events.ERROR, (_, data)=>{
+        // non-fatal buffer errors happen; only show for fatal
+        if (data && data.fatal){
+          console.warn('HLS fatal error', data);
+          showError('HLS playback error. Try Open (VLC) or Retry.');
+          hideOverlay();
+        }
+      });
 
-        $("outLink").textContent = mp4Url;
-        $("outLink").href = mp4Url;
-
-        $("player").src = mp4Url;
-        $("downloadBtn").disabled = false;
-
-        setStatus("done ✅ (blob URL created)");
-      } catch (e) {
-        setStatus("conversion failed ❌");
-        log("\nERROR: " + (e?.message || String(e)));
-      }
+      return;
     }
 
-    $("loadBtn").addEventListener("click", async () => {
-      try { await loadFFmpeg(); }
-      catch (e) {
-        setStatus("error loading ffmpeg ❌");
-        log("\nERROR: " + (e?.message || String(e)));
+    // last fallback
+    v.src = url;
+    try{ await v.play(); }catch{}
+    return;
+  }
+
+  // Direct file (mp4, mkv, etc.)
+  v.src = url;
+  try{ await v.play(); }catch{}
+}
+
+/* Player UI controls */
+$('pmCopy').onclick = async ()=>{
+  if (!S.currentPlayUrl) return;
+  try{ await navigator.clipboard.writeText(S.currentPlayUrl); }catch{}
+  flash('Copied link');
+};
+
+$('pmRetry').onclick = ()=>{
+  if (!S.currentPlayUrl) return;
+  playUrlInPage(S.currentPlayUrl, S.currentPlayTitle, S.currentPlaySub);
+};
+
+$('pmSpeed').onchange = ()=>{
+  const r = Number($('pmSpeed').value);
+  if (!Number.isNaN(r)) v.playbackRate = r;
+};
+
+$('pmFs').onclick = async ()=>{
+  try{
+    const wrap = $('pmVideoWrap');
+    if (document.fullscreenElement){
+      await document.exitFullscreen();
+    } else {
+      await wrap.requestFullscreen();
+    }
+  }catch{}
+};
+
+$('pmPip').onclick = async ()=>{
+  try{
+    if (document.pictureInPictureElement){
+      await document.exitPictureInPicture();
+    } else if (document.pictureInPictureEnabled){
+      await v.requestPictureInPicture();
+    }
+  }catch{}
+};
+
+/* Video events => better UX */
+v.addEventListener('waiting', ()=>{ showOverlay('Buffering…'); setPlayerPillStatus('Buffering'); });
+v.addEventListener('playing', ()=>{ hideOverlay(); setPlayerPillStatus('Playing'); });
+v.addEventListener('canplay', ()=>{ hideOverlay(); if ($('pmStatus').textContent === 'Loading') setPlayerPillStatus('Ready'); });
+v.addEventListener('pause', ()=>{ if ($('playerModal').style.display==='block') setPlayerPillStatus('Paused'); });
+v.addEventListener('ended', ()=>{ setPlayerPillStatus('Ended'); });
+v.addEventListener('volumechange', rememberVolume);
+v.addEventListener('error', ()=>{
+  // Some browsers raise error for formats like mkv
+  const ext = (S.currentPlayUrl.split('?')[0].split('.').pop() || '').toLowerCase();
+  showError(`This browser could not play the stream (${ext || 'unknown format'}). Use Open (VLC) or try another stream.`);
+  hideOverlay();
+});
+
+/* Keyboard shortcuts (when modal open) */
+document.addEventListener('keydown', (e)=>{
+  if ($('playerModal').style.display !== 'block') return;
+
+  // avoid stealing typing from inputs
+  const tag = (document.activeElement?.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+  if (e.key === 'Escape') return closePlayerModal();
+
+  if (e.key === ' '){
+    e.preventDefault();
+    if (v.paused) v.play().catch(()=>{});
+    else v.pause();
+    return;
+  }
+
+  if (e.key === 'ArrowRight'){ v.currentTime = Math.min((v.duration || Infinity), v.currentTime + 10); return; }
+  if (e.key === 'ArrowLeft'){ v.currentTime = Math.max(0, v.currentTime - 10); return; }
+  if (e.key.toLowerCase() === 'm'){ v.muted = !v.muted; return; }
+  if (e.key.toLowerCase() === 'f'){ $('pmFs').click(); return; }
+});
+
+/* ---------------- Login ---------------- */
+$('connect').onclick = async () => {
+  S.host = trimSlash($('host').value.trim());
+  S.user = $('username').value.trim();
+  S.pass = $('password').value.trim();
+  if (!S.host || !S.user || !S.pass) return setStatus('Enter host / username / password', 'err');
+
+  setStatus('Connecting…');
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}`;
+    const data = await fetchJsonRobust(url);
+
+    if (data.user_info && String(data.user_info.auth) === '1'){
+      setStatus('Login OK','ok');
+      $('kindTitle').textContent = 'Connected';
+      $('kindHint').textContent = 'Choose Live / Movies / Series.';
+    } else {
+      setStatus('Invalid login','err');
+    }
+  }catch(e){
+    console.error(e);
+    setStatus('Cannot connect (API). Check host or proxy.', 'err');
+  }
+};
+$('logout').onclick = () => location.reload();
+
+function requireLogin(){
+  if (!S.host || !S.user || !S.pass) throw new Error('Login first');
+}
+
+/* ---------------- Search across LOADED category rows ---------------- */
+$('search').addEventListener('input', ()=>{
+  const term = $('search').value.trim().toLowerCase();
+  for (const [catId, raw] of S.catItemsRaw.entries()){
+    const filtered = term ? raw.filter(x => (x.name||'').toLowerCase().includes(term)) : raw.slice();
+    S.catItems.set(catId, filtered);
+    renderTrack(catId);
+  }
+});
+
+/* ---------------- Nav ---------------- */
+$('liveBtn').onclick = ()=> loadKind('live');
+$('moviesBtn').onclick = ()=> loadKind('vod');
+$('seriesBtn').onclick = ()=> loadKind('series');
+
+/* ---------------- Category sliders layout ---------------- */
+function resetView(){
+  closeDrawer();
+  $('sections').innerHTML = '';
+  S.categories = [];
+  S.catItems.clear();
+  S.catItemsRaw.clear();
+  S.catNodes.clear();
+  if (S.io) { try{ S.io.disconnect(); }catch{} }
+  S.io = null;
+}
+
+function setKindHeader(kind){
+  const label = kind==='live' ? 'Live TV' : kind==='vod' ? 'Movies' : 'Series';
+  $('kindTitle').textContent = `${label} — Category Sliders`;
+  $('kindHint').textContent = 'Scroll the page; each category row loads automatically when it becomes visible.';
+}
+
+function makeArrow(direction){
+  const b = document.createElement('button');
+  b.className = 'sliderArrow ' + direction;
+  b.type = 'button';
+  b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${direction==='left' ? 'M14.5 6.5L9 12l5.5 5.5' : 'M9.5 6.5L15 12l-5.5 5.5'}"></path></svg>`;
+  return b;
+}
+
+function createCategorySection(cat){
+  const catId = String(cat.category_id);
+  const name = cat.category_name || 'Category';
+
+  const sec = document.createElement('section');
+  sec.className = 'catSection';
+  sec.dataset.cat = catId;
+
+  const top = document.createElement('div');
+  top.className = 'catTop';
+
+  const left = document.createElement('div');
+  left.className = 'catName';
+  left.innerHTML = `<span>${escapeHtml(name)}</span> <span class="catMeta" id="meta_${catId}">• waiting to load…</span>`;
+
+  const right = document.createElement('div');
+  right.style.display = 'flex';
+  right.style.gap = '8px';
+  right.style.flexWrap = 'wrap';
+
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'ghost';
+  loadBtn.type = 'button';
+  loadBtn.textContent = 'Load';
+  loadBtn.onclick = ()=> loadCategoryItems(catId);
+
+  right.appendChild(loadBtn);
+  top.appendChild(left);
+  top.appendChild(right);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sliderWrap';
+
+  const track = document.createElement('div');
+  track.className = 'track';
+  track.id = `track_${catId}`;
+
+  for (let i=0;i<6;i++){
+    const sk = document.createElement('div');
+    sk.className = 'skeleton';
+    track.appendChild(sk);
+  }
+
+  const aL = makeArrow('left');
+  const aR = makeArrow('right');
+  aL.onclick = ()=> scrollTrack(track.id, -1);
+  aR.onclick = ()=> scrollTrack(track.id, 1);
+
+  wrap.appendChild(aL);
+  wrap.appendChild(track);
+  wrap.appendChild(aR);
+
+  sec.appendChild(top);
+  sec.appendChild(wrap);
+
+  S.catNodes.set(catId, sec);
+  return sec;
+}
+
+function scrollTrack(trackId, dir){
+  const tr = document.getElementById(trackId);
+  if (!tr) return;
+  const card = tr.querySelector('.card') || tr.querySelector('.skeleton');
+  const gap = 14;
+  const amt = card ? card.offsetWidth + gap : 320;
+  tr.scrollBy({ left: dir * amt, behavior:'smooth' });
+}
+
+function buildSections(){
+  const box = $('sections');
+  box.innerHTML = '';
+
+  S.io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if (e.isIntersecting){
+        const catId = e.target.dataset.cat;
+        loadCategoryItems(catId);
+        try{ S.io.unobserve(e.target); }catch{}
       }
     });
+  }, { root:null, threshold:0.2 });
 
-    $("convertUrlBtn").addEventListener("click", async () => {
-      if (!loaded) return;
-      const url = $("mkvUrl").value.trim();
-      if (!url) return;
+  S.categories.forEach(cat=>{
+    const sec = createCategorySection(cat);
+    box.appendChild(sec);
+    S.io.observe(sec);
+  });
 
-      try {
-        setStatus("fetching MKV from URL… (may fail if CORS blocked)");
-        const data = await fetchFile(url); // <-- requires CORS allowed by the MKV host
-        setStatus("writing input file…");
-        await ffmpeg.writeFile("input.mkv", data);
-        await runConvert("input.mkv");
-      } catch (e) {
-        setStatus("URL fetch failed ❌ (likely CORS)");
-        log("\nERROR: " + (e?.message || String(e)));
-        log("\nTip: If the host blocks CORS, use 'Convert Local MKV File' instead.");
-      }
+  if (!S.categories.length){
+    box.innerHTML = `<div class="catSection"><div class="emptyRow">No categories found.</div></div>`;
+  }
+}
+
+/* ---------------- Loaders ---------------- */
+async function loadKind(kind){
+  closeDrawer();
+  try{ requireLogin(); } catch { return setStatus('Login first','err'); }
+
+  resetView();
+  S.kind = kind;
+  setKindHeader(kind);
+  $('search').value = '';
+
+  setStatus('Loading categories…');
+  try{
+    let url = '';
+    if (kind === 'live'){
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_live_categories`;
+    } else if (kind === 'vod'){
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_vod_categories`;
+    } else {
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series_categories`;
+    }
+
+    const cats = await fetchJsonRobust(url);
+    S.categories = orderCategories(Array.isArray(cats) ? cats : []);
+
+    buildSections();
+    setStatus('Ready','ok');
+  }catch(e){
+    console.error(e);
+    setStatus(`Failed to load categories: ${String(e.message||e).slice(0,140)}`, 'err');
+    $('sections').innerHTML = `<div class="catSection"><div class="emptyRow" style="color:#b91c1c">Could not load categories.</div></div>`;
+  }
+}
+
+async function loadCategoryItems(catId){
+  if (S.catItemsRaw.has(catId)) return;
+
+  const meta = document.getElementById(`meta_${catId}`);
+  if (meta) meta.textContent = '• loading…';
+
+  try{
+    let url = '';
+    if (S.kind === 'live'){
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_live_streams&category_id=${encodeURIComponent(catId)}`;
+    } else if (S.kind === 'vod'){
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_vod_streams&category_id=${encodeURIComponent(catId)}`;
+    } else {
+      url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series&category_id=${encodeURIComponent(catId)}`;
+    }
+
+    const data = await fetchJsonRobust(url);
+    const arr = Array.isArray(data) ? data : [];
+
+    S.catItemsRaw.set(catId, arr.slice());
+    S.catItems.set(catId, arr.slice());
+
+    if (meta) meta.textContent = `• ${arr.length} item(s)`;
+    renderTrack(catId);
+  }catch(e){
+    console.error(e);
+    if (meta) meta.textContent = '• failed to load';
+    const tr = document.getElementById(`track_${catId}`);
+    if (tr) tr.innerHTML = `<div class="emptyRow" style="color:#b91c1c">Failed to load this category.</div>`;
+  }
+}
+
+/* ---------------- Render track cards ---------------- */
+function renderTrack(catId){
+  const tr = document.getElementById(`track_${catId}`);
+  if (!tr) return;
+
+  const list = S.catItems.get(catId) || [];
+  tr.innerHTML = '';
+
+  if (!list.length){
+    tr.innerHTML = `<div class="emptyRow">No results.</div>`;
+    return;
+  }
+
+  list.forEach(item=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    let imgSrc = placeholderImg, title='Item', meta='', playUrl='';
+
+    if (S.kind==='live'){
+      imgSrc = (item.stream_icon && item.stream_icon !== 'null') ? item.stream_icon : placeholderImg;
+      title = item.name || 'Channel';
+      meta = 'Live • m3u8';
+      playUrl = `${S.host}/live/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.m3u8`;
+      card.onclick = ()=> playUrlInPage(playUrl, title, 'Live TV');
+    } else if (S.kind==='vod'){
+      imgSrc = (item.stream_icon && item.stream_icon !== 'null') ? item.stream_icon : placeholderImg;
+      title = item.name || 'Movie';
+      const ext = String(item.container_extension || 'mp4').replace(/^\./,'').toLowerCase();
+      meta = `Movie • ${ext.toUpperCase()}`;
+      playUrl = `${S.host}/movie/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${item.stream_id}.${ext}`;
+      card.onclick = ()=> playUrlInPage(playUrl, title, meta);
+    } else {
+      imgSrc = (item.cover && item.cover !== 'null') ? item.cover : (item.stream_icon||placeholderImg);
+      title = item.name || 'Series';
+      meta = item.releaseDate || 'Series';
+      card.onclick = ()=> openSeries(item);
+
+      const star = document.createElement('button');
+      const id = String(item.series_id);
+      const favMap = store.favSeries;
+      const isFav = !!favMap[id];
+
+      star.className = 'fav' + (isFav ? '' : ' off');
+      star.textContent = isFav ? '★' : '☆';
+      star.title = 'Toggle favorite';
+      star.onclick = (e)=>{ e.stopPropagation(); toggleFavSeries(item, star); };
+      card.appendChild(star);
+    }
+
+    const img = document.createElement('img');
+    img.className = 'thumb';
+    img.src = imgSrc;
+    img.onerror = ()=> img.src = placeholderImg;
+
+    const t = document.createElement('span');
+    t.className = 'titleTxt';
+    t.textContent = title;
+
+    const m = document.createElement('div');
+    m.className = 'metaTxt';
+    m.textContent = meta;
+
+    card.appendChild(img);
+    card.appendChild(t);
+    card.appendChild(m);
+    tr.appendChild(card);
+  });
+}
+
+/* ---------------- Favorites (Series) ---------------- */
+function toggleFavSeries(item, btn){
+  const id = String(item.series_id);
+  const favMap = store.favSeries;
+
+  if (favMap[id]){
+    delete favMap[id];
+    btn.classList.add('off'); btn.textContent='☆';
+  } else {
+    favMap[id] = {
+      id,
+      name: item.name || 'Series',
+      cover: item.cover || item.stream_icon || '',
+      category_id: item.category_id || '',
+      releaseDate: item.releaseDate || ''
+    };
+    btn.classList.remove('off'); btn.textContent='★';
+  }
+  store.favSeries = favMap;
+}
+
+/* ---------------- Series drawer ---------------- */
+$('closeDrawer').onclick = ()=> closeDrawer();
+$('copyAll').onclick = async ()=> {
+  if (!S.currentSeries) return;
+  const links = buildAllEpisodeLinks(S.currentSeasons);
+  try{ await navigator.clipboard.writeText(links.join('\n')); }catch{}
+  flash('Copied all episode links');
+};
+$('downloadM3U').onclick = ()=> {
+  if (!S.currentSeries) return;
+  const links = buildAllEpisodeLinks(S.currentSeasons);
+  const m3u = buildM3U(links, S.currentSeries.name);
+  downloadText(m3u, `${safeName(S.currentSeries.name || 'series')}.m3u`);
+};
+
+async function openSeries(serie){
+  $('seriesTitle').textContent = serie.name || 'Series';
+  S.currentSeries = { id: String(serie.series_id), name: serie.name || 'Series' };
+  $('seasons').innerHTML = '<p style="padding:8px">Loading seasons & episodes…</p>';
+  $('drawer').style.display = 'block';
+
+  const counts = store.favCount;
+  counts[S.currentSeries.id] = (counts[S.currentSeries.id] || 0) + 1;
+  store.favCount = counts;
+
+  try{
+    const url = `${S.host}/player_api.php?username=${encodeURIComponent(S.user)}&password=${encodeURIComponent(S.pass)}&action=get_series_info&series_id=${encodeURIComponent(serie.series_id)}`;
+    const info = await fetchJsonRobust(url);
+
+    const episodesBySeason = info.episodes || {};
+    S.currentSeasons = episodesBySeason;
+
+    const seasonsBox = $('seasons');
+    seasonsBox.innerHTML = '';
+    const seasonNums = Object.keys(episodesBySeason).sort((a,b)=>Number(a)-Number(b));
+
+    if (!seasonNums.length){
+      seasonsBox.innerHTML = '<p style="padding:8px">No episodes found.</p>';
+      return;
+    }
+
+    seasonNums.forEach(seasonNo=>{
+      const eps = episodesBySeason[seasonNo] || [];
+
+      const det = document.createElement('details');
+      det.className='season';
+
+      const sum = document.createElement('summary');
+      sum.textContent = `Season ${seasonNo} • ${eps.length} episode(s)`;
+
+      const wrap = document.createElement('div');
+      wrap.className='episodes';
+
+      eps.forEach(ep=>{
+        const row = document.createElement('div');
+        row.className='ep';
+
+        const title = document.createElement('div');
+        title.className='name';
+        title.textContent = ep.title || `Episode ${ep.episode_num || ''}`;
+
+        const ext = (ep.container_extension || 'mp4').replace(/^\./,'').toLowerCase();
+        const epUrl = `${S.host}/series/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${ep.id}.${ext}`;
+
+        const play = document.createElement('button');
+        play.className='btn primary';
+        play.type='button';
+        play.textContent='Play';
+        play.onclick = ()=> playUrlInPage(epUrl, S.currentSeries?.name || 'Series', ep.title || `Season ${seasonNo}`);
+
+        const open = document.createElement('a');
+        open.className='btn ghost';
+        open.textContent='Open Link';
+        open.href = epUrl;
+        open.target='_blank';
+        open.rel='noopener';
+
+        const copy = document.createElement('button');
+        copy.className='btn ghost copy';
+        copy.textContent='Copy Link';
+        copy.onclick = async ()=>{
+          try{ await navigator.clipboard.writeText(epUrl); }catch{}
+          copy.textContent='Copied!';
+          setTimeout(()=>copy.textContent='Copy Link', 1200);
+        };
+
+        row.appendChild(title);
+        row.appendChild(play);
+        row.appendChild(open);
+        row.appendChild(copy);
+        wrap.appendChild(row);
+      });
+
+      det.appendChild(sum);
+      det.appendChild(wrap);
+      seasonsBox.appendChild(det);
     });
 
-    $("convertFileBtn").addEventListener("click", async () => {
-      if (!loaded) return;
-      const f = $("fileInput").files?.[0];
-      if (!f) { setStatus("please choose a local MKV file first"); return; }
+    const first = seasonsBox.querySelector('details');
+    if (first) first.open = true;
 
-      try {
-        setStatus("reading local file…");
-        await ffmpeg.writeFile("input.mkv", await fetchFile(f));
-        await runConvert("input.mkv");
-      } catch (e) {
-        setStatus("file conversion failed ❌");
-        log("\nERROR: " + (e?.message || String(e)));
-      }
-    });
+  }catch(e){
+    console.error(e);
+    $('seasons').innerHTML = `<p style="padding:8px;color:#b91c1c">Failed to load episodes: ${String(e.message||e).slice(0,120)}</p>`;
+  }
+}
 
-    $("downloadBtn").addEventListener("click", () => {
-      if (!mp4Blob || !mp4Url) return;
-      const a = document.createElement("a");
-      a.href = mp4Url;
-      a.download = "converted.mp4";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+function closeDrawer(){
+  $('drawer').style.display='none';
+  S.currentSeries=null;
+  S.currentSeasons={};
+}
+
+/* ---------------- Link builders & utils ---------------- */
+function buildAllEpisodeLinks(bySeason){
+  const links = [];
+  const seasonNums = Object.keys(bySeason).sort((a,b)=>Number(a)-Number(b));
+  seasonNums.forEach(s=>{
+    (bySeason[s]||[]).forEach(ep=>{
+      const ext = (ep.container_extension || 'mp4').replace(/^\./,'').toLowerCase();
+      links.push(`${S.host}/series/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${ep.id}.${ext}`);
     });
-  </script>
+  });
+  return links;
+}
+
+function buildM3U(links, title='Playlist'){
+  let m3u = '#EXTM3U\n';
+  links.forEach((u, i)=>{
+    m3u += `#EXTINF:-1,${title} ${String(i+1).padStart(2,'0')}\n${u}\n`;
+  });
+  return m3u;
+}
+
+function downloadText(txt, filename){
+  const blob = new Blob([txt], {type:'audio/x-mpegurl'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename || 'playlist.m3u';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+
+function flash(msg){
+  const prev = $('status').innerHTML;
+  setStatus(msg,'ok');
+  setTimeout(()=>{ $('status').innerHTML = prev; }, 1200);
+}
+
+function escapeHtml(s){
+  return String(s||'')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#39;");
+}
+</script>
 </body>
 </html>
