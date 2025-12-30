@@ -53,7 +53,7 @@
   .season{border:1px solid var(--border);border-radius:10px;overflow:hidden}
   .season summary{cursor:pointer;padding:10px;background:#0f141a}
   .episodes{padding:8px;display:grid;gap:8px}
-  .ep{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:#0f141a;border:1px solid var(--border);border-radius:8px;padding:8px}
+  .ep{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;background:#0f141a;border:1px solid var(--border);border-radius:8px;padding:8px}
   .ep .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .copy{min-width:110px}
 
@@ -70,9 +70,10 @@
   <!-- LEFT -->
   <aside id="left">
     <strong>Login</strong>
-    <input id="host" placeholder="Host (e.g. http://line.tx-4k.com)">
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
+    <!-- Prefilled values -->
+    <input id="host" value="http://line.tx-4k.com" placeholder="Host (e.g. http://line.tx-4k.com)">
+    <input id="username" value="b126a24d3" placeholder="Username">
+    <input id="password" type="password" value="36a7e66d5d" placeholder="Password">
     <button id="connect">Connect</button>
     <div id="status"></div>
 
@@ -86,7 +87,7 @@
 
     <div style="margin-top:6px;font-size:.85rem;color:#9aa7b0;line-height:1.35">
       <span class="pill warn">Note</span>
-      If you use public CORS proxies, your username/password are sent through them. Best fix is your own proxy (see comment in code).
+      Public CORS proxies can see your username/password (because they’re in the URL). Best fix is running your own proxy.
     </div>
 
     <button id="logout" class="ghost">Logout</button>
@@ -132,7 +133,6 @@ function setStatus(msg, kind){
 function safeName(s){ return (s||'').replace(/[^\w\s\-\.\(\)&]/g,'').trim(); }
 
 function pickJsonText(text){
-  // Some proxies return extra headers/html; try to find first { or [
   const iObj = text.indexOf('{');
   const iArr = text.indexOf('[');
   let i = -1;
@@ -152,7 +152,6 @@ const PROXY_BASE = '';       // e.g. 'http://localhost:8787/' (your own proxy th
 function wrapUrl(url){
   if (PROXY_MODE === 'none') return url;
   if (PROXY_MODE === 'self') return PROXY_BASE + url;
-  // public fallbacks (we will rotate if one fails)
   return url;
 }
 
@@ -176,7 +175,7 @@ async function fetchJsonRobust(url){
       const cleaned = pickJsonText(text);
 
       if (!r.ok){
-        throw new Error(`HTTP ${r.status} from ${u} :: ${cleaned.slice(0,180)}`);
+        throw new Error(`HTTP ${r.status} :: ${cleaned.slice(0,180)}`);
       }
       return JSON.parse(cleaned);
     }catch(e){
@@ -198,7 +197,7 @@ const store = {
 const S = {
   host:'', user:'', pass:'',
   kind:'',              // 'live' | 'vod' | 'series'
-  categories:[],        // current categories list for kind
+  categories:[],        // categories for current kind
   items:[],             // loaded items for current category
   filtered:[],
   filteredSource:[],
@@ -214,7 +213,7 @@ const S = {
 $('connect').onclick = async () => {
   S.host = trimSlash($('host').value.trim());
   S.user = $('username').value.trim();
-  S.pass = $('password').value.trim();
+  S.pass = $('password').value.trim(); // trims any accidental leading space
   if (!S.host || !S.user || !S.pass) return setStatus('Enter host / username / password', 'err');
 
   setStatus('Connecting…');
@@ -231,7 +230,7 @@ $('connect').onclick = async () => {
     }
   }catch(e){
     console.error(e);
-    setStatus('Cannot connect (API). Check host/port or proxy.', 'err');
+    setStatus('Cannot connect (API). Check host or proxy.', 'err');
   }
 };
 $('logout').onclick = () => location.reload();
@@ -272,32 +271,25 @@ function renderCategories(){
     list.appendChild(b);
   };
 
-  // Built-in "All" & Favorites (for series only)
+  // Built-ins
   if (S.kind === 'series'){
     const favMap = store.favSeries;
-    const favIds = Object.keys(favMap);
-    addBtn('all', 'Pick a category (recommended)', 0, S.currentCat==='all'); // we won't auto-fetch ALL series to avoid huge payloads
-    addBtn('top', 'Top Favorites', favIds.length, S.currentCat==='top');
+    addBtn('all', 'Pick a category (recommended)', 0, S.currentCat==='all');
+    addBtn('top', 'Top Favorites', Object.keys(favMap).length, S.currentCat==='top');
   } else {
     addBtn('all', 'Pick a category (recommended)', 0, S.currentCat==='all');
   }
 
   // Server categories
   for (const c of S.categories){
-    const id = String(c.category_id);
-    const nm = c.category_name || 'Category';
-    addBtn(id, nm, '…', S.currentCat===id);
+    addBtn(String(c.category_id), c.category_name || 'Category', '…', S.currentCat===String(c.category_id));
   }
 }
 
 /* ---------------- Loaders (category-first) ---------------- */
 async function loadKind(kind){
   closeDrawer();
-  try{
-    requireLogin();
-  }catch{
-    return setStatus('Login first','err');
-  }
+  try{ requireLogin(); } catch { return setStatus('Login first','err'); }
 
   S.kind = kind;
   S.currentCat = 'all';
@@ -312,7 +304,7 @@ async function loadKind(kind){
       S.categories = await fetchJsonRobust(url);
       if (!Array.isArray(S.categories)) S.categories = [];
       renderCategories();
-      $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Select a Live category to load channels (avoids huge payloads).</p>`;
+      $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Select a Live category to load channels.</p>`;
     }
 
     if (kind === 'vod'){
@@ -330,33 +322,29 @@ async function loadKind(kind){
       S.categories = await fetchJsonRobust(url);
       if (!Array.isArray(S.categories)) S.categories = [];
       renderCategories();
-      $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Select a Series category to load shows (recommended). Use Top Favorites anytime.</p>`;
+      $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Select a Series category to load shows (recommended). Or use Top Favorites.</p>`;
     }
 
     setStatus('Ready','ok');
-
-    // Update the visible counts badges once we actually load categories (optional small UX)
-    // We'll leave them as "…" to avoid forcing big fetches.
-
   }catch(e){
     console.error(e);
     setStatus(`Failed to load categories: ${String(e.message||e).slice(0,120)}`, 'err');
-    $('grid').innerHTML = '';
     showCats();
     $('catList').innerHTML = `<div class="catbtn">Could not load categories.</div>`;
+    $('grid').innerHTML = '';
   }
 }
 
-/* ---------------- Apply category -> load items for that category ---------------- */
+/* ---------------- Apply category -> load items ---------------- */
 async function applyCategory(catId){
   S.currentCat = catId;
   $('search').value = '';
   closeDrawer();
 
-  // Highlight
-  document.querySelectorAll('#catList .catbtn').forEach(n => n.classList.toggle('active', n.dataset.id === S.currentCat));
+  document.querySelectorAll('#catList .catbtn')
+    .forEach(n => n.classList.toggle('active', n.dataset.id === S.currentCat));
 
-  // Special: Top Favorites (series only) - no server call required
+  // Top Favorites (Series) - local only
   if (S.kind === 'series' && catId === 'top'){
     const favMap = store.favSeries;
     const counts = store.favCount;
@@ -383,16 +371,13 @@ async function applyCategory(catId){
     return;
   }
 
-  // For 'all' we do NOT load everything (too big). Force user to pick a real category.
+  // Don’t load "ALL" (huge). Force category selection.
   if (catId === 'all'){
-    S.items = [];
-    S.filtered = [];
-    S.filteredSource = [];
-    $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Pick a category on the left to load content (this avoids the proxy failing on huge lists).</p>`;
+    S.items = []; S.filtered = []; S.filteredSource = [];
+    $('grid').innerHTML = `<p style="padding:12px;color:#9aa7b0">Pick a category to load content (avoids huge payloads).</p>`;
     return;
   }
 
-  // Load per-category items
   $('grid').innerHTML = `<p style="padding:12px">Loading…</p>`;
   try{
     let url = '';
@@ -412,15 +397,14 @@ async function applyCategory(catId){
     S.page = 0;
     paint();
     setStatus('Loaded','ok');
-
   }catch(e){
     console.error(e);
     setStatus(`Failed to load items: ${String(e.message||e).slice(0,140)}`, 'err');
-    $('grid').innerHTML = `<p style="padding:12px;color:#ef4444">Failed to load this category. Try a different proxy or run your own proxy.</p>`;
+    $('grid').innerHTML = `<p style="padding:12px;color:#ef4444">Failed to load this category.</p>`;
   }
 }
 
-/* ---------------- Grid paint ---------------- */
+/* ---------------- Grid ---------------- */
 function paint(){
   const grid = $('grid');
   grid.innerHTML = '';
@@ -521,13 +505,12 @@ function toggleFavSeries(item, btn){
 
   store.favSeries = favMap;
 
-  // If we are in Top Favorites, refresh view
   if (S.kind==='series' && S.currentCat==='top'){
     applyCategory('top');
   }
 }
 
-/* ---------------- Series detail (seasons + links) ---------------- */
+/* ---------------- Series drawer ---------------- */
 $('closeDrawer').onclick = ()=> closeDrawer();
 $('copyAll').onclick = ()=> {
   if (!S.currentSeries) return;
@@ -548,7 +531,7 @@ async function openSeries(serie){
   $('seasons').innerHTML = '<p style="padding:8px">Loading seasons & episodes…</p>';
   $('drawer').style.display = 'block';
 
-  // increment open count for ranking
+  // open count
   const counts = store.favCount;
   counts[S.currentSeries.id] = (counts[S.currentSeries.id] || 0) + 1;
   store.favCount = counts;
@@ -620,6 +603,7 @@ async function openSeries(serie){
         const ext = (ep.container_extension || 'mp4').replace(/^\./,'');
         const epUrl = `${S.host}/series/${encodeURIComponent(S.user)}/${encodeURIComponent(S.pass)}/${ep.id}.${ext}`;
 
+        // Open Link (direct)
         const open = document.createElement('a');
         open.className='btn primary';
         open.textContent='Open Link';
@@ -627,6 +611,52 @@ async function openSeries(serie){
         open.target='_blank';
         open.rel='noopener';
 
+        // Open in Browser (HTML5 player page)
+        const openBrowser = document.createElement('button');
+        openBrowser.className = 'btn ghost';
+        openBrowser.textContent = 'Open in Browser';
+        openBrowser.onclick = () => {
+          const safe = s => String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const mime = ext.toLowerCase()==='m3u8'
+            ? 'application/vnd.apple.mpegurl'
+            : (ext.toLowerCase()==='mp4' ? 'video/mp4' : `video/${ext.toLowerCase()}`);
+
+          const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${safe(ep.title || 'Episode')}</title>
+<style>
+  body{margin:0;background:#0d1117;color:#e6edf3;font-family:system-ui,Segoe UI,Arial}
+  header{padding:10px 12px;background:#161b22;border-bottom:1px solid #30363d;font-weight:700}
+  .wrap{padding:12px;display:grid;gap:10px}
+  video{width:100%;max-height:75vh;background:#000;border-radius:10px;border:1px solid #232a31}
+  a{color:#2f81f7;text-decoration:none;font-weight:700}
+  .muted{color:#9aa7b0;font-size:.9rem;line-height:1.35}
+</style>
+</head>
+<body>
+<header>Browser Player</header>
+<div class="wrap">
+  <div><strong>${safe(S.currentSeries?.name || 'Series')}</strong> — ${safe(ep.title || 'Episode')}</div>
+  <video controls autoplay playsinline>
+    <source src="${epUrl}" type="${mime}">
+    Your browser can't play this stream. <a href="${epUrl}">Open direct link</a>
+  </video>
+  <div class="muted">
+    If it doesn’t play: many browsers don’t support all stream types (especially HLS on Chrome/Windows). Use “Open Link” in VLC.
+  </div>
+</div>
+</body>
+</html>`;
+          const blob = new Blob([html], { type: 'text/html' });
+          const u = URL.createObjectURL(blob);
+          window.open(u, '_blank', 'noopener');
+          setTimeout(()=>URL.revokeObjectURL(u), 30000);
+        };
+
+        // Copy VLC Link
         const copy = document.createElement('button');
         copy.className='btn ghost copy';
         copy.textContent='Copy VLC Link';
@@ -638,6 +668,7 @@ async function openSeries(serie){
 
         row.appendChild(title);
         row.appendChild(open);
+        row.appendChild(openBrowser);
         row.appendChild(copy);
         wrap.appendChild(row);
       });
@@ -647,7 +678,6 @@ async function openSeries(serie){
       seasonsBox.appendChild(det);
     });
 
-    // open first season by default
     const first = seasonsBox.querySelector('details');
     if (first) first.open = true;
 
@@ -705,4 +735,3 @@ function flash(msg){
 </script>
 </body>
 </html>
-
